@@ -47,6 +47,26 @@ io.on('connection', (socket) => {
         console.log(`Socket ${socket.id} joined supervisor_room`);
     });
 
+    // WebRTC Signaling
+    socket.on('join_stream_room', (roomId) => {
+        socket.join(roomId);
+        console.log(`Socket ${socket.id} joined stream room: ${roomId}`);
+        // Notify others in room (Driver) that a viewer joined
+        socket.to(roomId).emit('viewer_joined', socket.id);
+    });
+
+    socket.on('offer', (payload) => {
+        io.to(payload.target).emit('offer', payload);
+    });
+
+    socket.on('answer', (payload) => {
+        io.to(payload.target).emit('answer', payload);
+    });
+
+    socket.on('ice_candidate', (payload) => {
+        io.to(payload.target).emit('ice_candidate', payload);
+    });
+
     socket.on('disconnect', () => {
         console.log('Client disconnected:', socket.id);
     });

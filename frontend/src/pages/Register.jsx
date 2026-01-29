@@ -113,7 +113,6 @@ const Register = () => {
                             </div>
                         </>
                     )}
-
                     <button type="submit" className="login-btn" disabled={loading}>
                         {loading ? 'Creating account...' : 'Sign Up'}
                     </button>
@@ -126,9 +125,9 @@ const Register = () => {
                             </Link>
                         </span>
                     </div>
-                </form>
-            </div>
-        </div>
+                </form >
+            </div >
+        </div >
     );
 };
 
