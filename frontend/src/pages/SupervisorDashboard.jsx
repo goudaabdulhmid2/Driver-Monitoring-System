@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import io from 'socket.io-client';
 import axios from 'axios';
 import {
@@ -28,50 +28,130 @@ const SupervisorDashboard = () => {
 
     // UI State
     const [theme, setTheme] = useState('dark');
-    const [currentView, setCurrentView] = useState('dashboard'); // 'dashboard', 'drivers', 'settings'
+    const [currentView, setCurrentView] = useState('dashboard');
     const [selectedSnapshot, setSelectedSnapshot] = useState(null);
     const [drivers, setDrivers] = useState([]);
 
+    // Live View State
+    const [activeDriverId, setActiveDriverId] = useState(null);
+    const remoteVideoRef = useRef();
+    const socketRef = useRef();
+    const peerRef = useRef();
+
     useEffect(() => {
-        // Apply theme
         document.body.className = theme === 'light' ? 'light-theme' : '';
     }, [theme]);
 
     useEffect(() => {
         const fetchInitialData = async () => {
             try {
-                // Fetch Alerts
                 const alertsRes = await axios.get('http://localhost:5000/api/alerts');
                 setAlerts(alertsRes.data);
                 calculateStats(alertsRes.data);
-
-                // Fetch Drivers
                 const driversRes = await axios.get('http://localhost:5000/api/users/drivers');
                 setDrivers(driversRes.data);
-
             } catch (error) {
                 console.error("Failed to fetch data", error);
             }
         };
         fetchInitialData();
 
-        const newSocket = io('http://localhost:5000');
-        newSocket.emit('join_supervisor');
+        socketRef.current = io('http://localhost:5000');
+        socketRef.current.emit('join_supervisor');
 
-        newSocket.on('new_alert', (alert) => {
+        socketRef.current.on('new_alert', (alert) => {
             setAlerts((prev) => {
                 const updated = [alert, ...prev];
                 calculateStats(updated);
                 return updated;
             });
-            // Auto-show high severity snapshots if in dashboard view
             if (alert.eventId.severity === 'HIGH') {
                 setSelectedSnapshot(alert.eventId.snapshotUrl);
             }
         });
 
-        return () => newSocket.close();
+        // WebRTC Handlers
+        socketRef.current.on('offer', handleReceiveOffer);
+        socketRef.current.on('ice_candidate', handleNewICECandidateMsg);
+
+        return () => socketRef.current.close();
     }, []);
+
+    const startLiveView = (driverId) => {
+        if (!driverId) return;
+        setActiveDriverId(driverId);
+        setSelectedSnapshot(null); // Clear snapshot if any
+
+        const roomId = `stream_${driverId}`;
+        socketRef.current.emit('join_stream_room', roomId);
+        console.log("Joined stream room for live view:", roomId);
+    };
+
+    const endLiveView = () => {
+        setActiveDriverId(null);
+        if (peerRef.current) {
+            peerRef.current.close();
+            peerRef.current = null;
+        }
+        if (remoteVideoRef.current) {
+            remoteVideoRef.current.srcObject = null;
+        }
+    };
+
+    const handleReceiveOffer = async (payload) => {
+        console.log("Received Offer from driver");
+        const peer = new RTCPeerConnection({
+            iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
+        });
+        peerRef.current = peer;
+
+        peer.ontrack = (e) => {
+            console.log("Received Remote Stream");
+            if (remoteVideoRef.current) {
+                remoteVideoRef.current.srcObject = e.streams[0];
+                remoteVideoRef.current.play().catch(err => console.error("Auto-play failed:", err));
+            }
+        };
+
+        peer.onconnectionstatechange = () => {
+            console.log("Connection State:", peer.connectionState);
+            if (peer.connectionState === 'connected') {
+                console.log("Peer Connected successfully!");
+            }
+            if (peer.connectionState === 'failed' || peer.connectionState === 'disconnected') {
+                console.error("Peer connection failed/disconnected");
+            }
+        };
+
+        peer.onicecandidate = (e) => {
+            if (e.candidate) {
+                const icePayload = {
+                    target: payload.caller,
+                    candidate: e.candidate
+                };
+                socketRef.current.emit('ice_candidate', icePayload);
+            }
+        };
+
+        const desc = new RTCSessionDescription(payload.sdp);
+        await peer.setRemoteDescription(desc);
+        const answer = await peer.createAnswer();
+        await peer.setLocalDescription(answer);
+
+        const answerPayload = {
+            target: payload.caller,
+            caller: socketRef.current.id,
+            sdp: peer.localDescription
+        };
+        socketRef.current.emit('answer', answerPayload);
+    };
+
+    const handleNewICECandidateMsg = (incoming) => {
+        if (peerRef.current) {
+            const candidate = new RTCIceCandidate(incoming.candidate);
+            peerRef.current.addIceCandidate(candidate).catch(e => console.error(e));
+        }
+    };
 
     const calculateStats = (data) => {
         const counts = { drowsiness: 0, distraction: 0, phone: 0 };
@@ -84,9 +164,7 @@ const SupervisorDashboard = () => {
         setStats(counts);
     };
 
-    const toggleTheme = () => {
-        setTheme(prev => prev === 'dark' ? 'light' : 'dark');
-    };
+    const toggleTheme = () => setTheme(prev => prev === 'dark' ? 'light' : 'dark');
 
     const chartData = [
         { name: 'Drowsiness', value: stats.drowsiness, color: '#3b82f6' },
@@ -94,9 +172,7 @@ const SupervisorDashboard = () => {
         { name: 'Phone', value: stats.phone, color: '#22c55e' },
     ];
 
-    const formatTime = (isoString) => {
-        return new Date(isoString).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    };
+    const formatTime = (isoString) => new Date(isoString).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
     const getSeverityBadge = (type) => {
         switch (type) {
@@ -109,43 +185,56 @@ const SupervisorDashboard = () => {
 
     const renderDashboard = () => (
         <div className="dashboard-grid">
-            {/* Left Column */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-
-                {/* Live Feed / Snapshot Card */}
                 <div className="card-glass">
                     <div className="card-title">
-                        <span>{selectedSnapshot ? 'Event Snapshot' : 'Live Driver Feed'}</span>
-                        {selectedSnapshot && (
+                        <span>
+                            {activeDriverId ? 'Live Driver Feed' : selectedSnapshot ? 'Event Snapshot' : 'Driver Feed'}
+                        </span>
+                        {(selectedSnapshot || activeDriverId) && (
                             <button
-                                onClick={() => setSelectedSnapshot(null)}
+                                onClick={activeDriverId ? endLiveView : () => setSelectedSnapshot(null)}
                                 style={{ fontSize: '0.8rem', color: '#3b82f6', background: 'none', border: 'none', cursor: 'pointer' }}
                             >
-                                Return to Live View
+                                {activeDriverId ? 'Stop Live View' : 'Close Snapshot'}
                             </button>
                         )}
                     </div>
                     <div className="live-feed-container">
-                        {selectedSnapshot ? (
+                        {activeDriverId ? (
+                            // Fix for Video Autoplay Issue: Browsers block unmuted autoplay.
+                            // Adding 'muted' ensures video plays immediately.
+                            <video
+                                ref={remoteVideoRef}
+                                autoPlay
+                                playsInline
+                                muted // Important for local testing to avoid feedback and allow autoplay
+                                style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                            />
+                        ) : selectedSnapshot ? (
                             <img
                                 src={selectedSnapshot}
                                 style={{ width: '100%', height: '100%', objectFit: 'contain' }}
                                 alt="Event Snapshot"
                             />
                         ) : (
-                            /* Placeholder for Video */
-                            <img
-                                src="https://images.unsplash.com/photo-1449965408869-eaa3f722e40d?q=80&w=1000&auto=format&fit=crop"
-                                style={{ width: '100%', height: '100%', objectFit: 'cover', opacity: 0.6 }}
-                                alt="Driver Live Feed Placeholder"
-                            />
+                            <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'black', color: '#a0a0a0', flexDirection: 'column', gap: '10px' }}>
+                                <Video size={48} />
+                                <span>No Active Feed</span>
+                                <span style={{ fontSize: '0.8rem' }}>Select a driver to view live</span>
+                            </div>
                         )}
 
-                        {/* Overlay only if showing a snapshot of a high severity event (logic simplified) */}
                         {selectedSnapshot && (
                             <div className="feed-overlay">
                                 <TriangleAlert />
                                 VIOLATION SNAPSHOT
+                            </div>
+                        )}
+
+                        {activeDriverId && (
+                            <div style={{ position: 'absolute', top: 10, right: 10, background: 'rgba(239, 68, 68, 0.8)', color: 'white', padding: '4px 8px', borderRadius: '4px', fontSize: '0.8rem', fontWeight: 600 }}>
+                                LIVE
                             </div>
                         )}
                     </div>
@@ -153,44 +242,33 @@ const SupervisorDashboard = () => {
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '16px', padding: '10px', background: 'rgba(255,255,255,0.05)', borderRadius: '8px' }}>
                         <div>
                             <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Status</div>
-                            <div style={{ fontWeight: 600, color: selectedSnapshot ? '#ef4444' : '#22c55e' }}>
-                                {selectedSnapshot ? 'Reviewing Event' : 'Monitoring Active'}
+                            <div style={{ fontWeight: 600, color: (selectedSnapshot || activeDriverId) ? '#ef4444' : '#22c55e' }}>
+                                {activeDriverId ? 'Live Streaming' : selectedSnapshot ? 'Reviewing Event' : 'Idle'}
                             </div>
                         </div>
-                        {selectedSnapshot && <button className="btn-primary" onClick={() => setSelectedSnapshot(null)}>Dismiss Snapshot</button>}
                     </div>
                 </div>
 
-                {/* Stats Row */}
                 <div className="card-glass">
                     <div className="card-title">Driver Statistics</div>
                     <div className="stats-grid">
                         <div className="stat-card">
                             <span className="stat-label flex items-center gap-2"><EyeOff size={16} /> Drowsiness Alerts</span>
-                            <div className="stat-value-box">
-                                <span className="stat-value">{stats.drowsiness}</span>
-                            </div>
+                            <div className="stat-value-box"><span className="stat-value">{stats.drowsiness}</span></div>
                         </div>
                         <div className="stat-card">
                             <span className="stat-label flex items-center gap-2"><Smartphone size={16} /> Phone Usage</span>
-                            <div className="stat-value-box">
-                                <span className="stat-value">{stats.phone}</span>
-                            </div>
+                            <div className="stat-value-box"><span className="stat-value">{stats.phone}</span></div>
                         </div>
                         <div className="stat-card">
                             <span className="stat-label flex items-center gap-2"><Activity size={16} /> Distraction</span>
-                            <div className="stat-value-box">
-                                <span className="stat-value">{stats.distraction}</span>
-                            </div>
+                            <div className="stat-value-box"><span className="stat-value">{stats.distraction}</span></div>
                         </div>
                     </div>
                 </div>
             </div>
 
-            {/* Right Column */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-
-                {/* Alerts History */}
                 <div className="card-glass" style={{ flex: 1 }}>
                     <div className="card-title">Alerts History</div>
                     <div className="table-container">
@@ -222,10 +300,9 @@ const SupervisorDashboard = () => {
                     </div>
                 </div>
 
-                {/* Alerts Overview Chart */}
                 <div className="card-glass" style={{ height: '300px' }}>
                     <div className="card-title">Alerts Overview</div>
-                    <ResponsiveContainer width="100%" height="100%">
+                    <ResponsiveContainer width="100%" height={240}>
                         <BarChart data={chartData}>
                             <XAxis dataKey="name" stroke="var(--text-secondary)" fontSize={12} tickLine={false} axisLine={false} />
                             <YAxis stroke="var(--text-secondary)" fontSize={12} tickLine={false} axisLine={false} />
@@ -257,8 +334,7 @@ const SupervisorDashboard = () => {
                                 <th>Name</th>
                                 <th>Email</th>
                                 <th>License ID</th>
-                                <th>Vehicle Status</th>
-                                <th>Last Active</th>
+                                <th>Status</th>
                                 <th>Actions</th>
                             </tr>
                         </thead>
@@ -268,16 +344,18 @@ const SupervisorDashboard = () => {
                                     <td style={{ fontWeight: 600 }}>{driver.name}</td>
                                     <td style={{ color: 'var(--text-secondary)' }}>{driver.email}</td>
                                     <td>{driver.licenseNumber}</td>
+                                    <td><span className={`badge ${driver.status === 'Active' ? 'badge-green' : 'badge-orange'}`}>{driver.status}</span></td>
                                     <td>
-                                        <span className={`badge ${driver.status === 'Active' ? 'badge-green' : 'badge-orange'}`}>
-                                            {driver.status}
-                                        </span>
-                                    </td>
-                                    <td style={{ color: 'var(--text-secondary)' }}>
-                                        {driver.lastActiveAt ? new Date(driver.lastActiveAt).toLocaleString() : 'Never'}
-                                    </td>
-                                    <td>
-                                        <button className="btn-primary" style={{ padding: '4px 8px', fontSize: '0.8rem' }}>View Logs</button>
+                                        <button
+                                            className="btn-primary"
+                                            style={{ padding: '4px 8px', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '4px' }}
+                                            onClick={() => {
+                                                setCurrentView('dashboard');
+                                                startLiveView(driver._id);
+                                            }}
+                                        >
+                                            <Video size={14} /> View Live
+                                        </button>
                                     </td>
                                 </tr>
                             ))}
@@ -292,58 +370,37 @@ const SupervisorDashboard = () => {
         <div className="dashboard-grid" style={{ gridTemplateColumns: '1fr' }}>
             <div className="card-glass">
                 <div className="card-title">System Settings</div>
-                <p style={{ color: 'var(--text-secondary)' }}>Configuration options for alert thresholds, notification preferences, and system maintenance will go here.</p>
+                <p style={{ color: 'var(--text-secondary)' }}>Configuration options placeholder.</p>
             </div>
         </div>
     );
 
     return (
         <div className="dashboard-container">
-            {/* Top Navigation */}
             <header className="header">
                 <div className="header-logo">
                     <Video color="var(--accent-blue)" />
                     <span>Driver Monitoring System</span>
                 </div>
                 <nav className="header-nav">
-                    <button
-                        className={`nav-link ${currentView === 'dashboard' ? 'active' : ''}`}
-                        onClick={() => setCurrentView('dashboard')}
-                        style={{ background: 'none', border: 'none', fontSize: '1rem', cursor: 'pointer' }}
-                    >
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                            <LayoutDashboard size={18} /> Dashboard
-                        </div>
+                    <button className={`nav-link ${currentView === 'dashboard' ? 'active' : ''}`} onClick={() => setCurrentView('dashboard')}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}><LayoutDashboard size={18} /> Dashboard</div>
                     </button>
-                    <button
-                        className={`nav-link ${currentView === 'drivers' ? 'active' : ''}`}
-                        onClick={() => setCurrentView('drivers')}
-                        style={{ background: 'none', border: 'none', fontSize: '1rem', cursor: 'pointer' }}
-                    >
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                            <Users size={18} /> Drivers
-                        </div>
+                    <button className={`nav-link ${currentView === 'drivers' ? 'active' : ''}`} onClick={() => setCurrentView('drivers')}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}><Users size={18} /> Drivers</div>
                     </button>
-                    <button
-                        className={`nav-link ${currentView === 'settings' ? 'active' : ''}`}
-                        onClick={() => setCurrentView('settings')}
-                        style={{ background: 'none', border: 'none', fontSize: '1rem', cursor: 'pointer' }}
-                    >
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                            <Settings size={18} /> Settings
-                        </div>
+                    <button className={`nav-link ${currentView === 'settings' ? 'active' : ''}`} onClick={() => setCurrentView('settings')}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}><Settings size={18} /> Settings</div>
                     </button>
                 </nav>
                 <div className="header-profile">
                     <button onClick={toggleTheme} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-secondary)', marginRight: '10px' }}>
                         {theme === 'dark' ? <Sun size={20} /> : <Moon size={20} />}
                     </button>
-
                     <div style={{ textAlign: 'right', marginRight: '10px', fontSize: '0.9rem' }}>
                         <div style={{ fontWeight: 600 }}>{user.name}</div>
                         <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>SUPERVISOR</div>
                     </div>
-
                     <div style={{ width: 32, height: 32, borderRadius: '50%', background: 'var(--accent-blue)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                         <User size={18} color="white" />
                     </div>
@@ -352,8 +409,6 @@ const SupervisorDashboard = () => {
                     </button>
                 </div>
             </header>
-
-            {/* Main Content */}
             <div style={{ overflowY: 'auto', flex: 1 }}>
                 {currentView === 'dashboard' && renderDashboard()}
                 {currentView === 'drivers' && renderDrivers()}
