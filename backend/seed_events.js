@@ -6,21 +6,41 @@ const Alert = require('./models/Alert');
 
 dotenv.config();
 
+console.log('Attempting to connect to:', process.env.MONGO_URI);
+
 mongoose.connect(process.env.MONGO_URI)
     .then(async () => {
         console.log('MongoDB Connected');
         await seedData();
     })
-    .catch(err => console.error(err));
+    .catch(err => {
+        console.error('Connection Error:', err);
+        console.error('Error Code:', err.code);
+        console.error('Error Name:', err.name);
+    });
 
 const seedData = async () => {
     try {
-        const driver = await User.findOne({ email: 'driver@dms.com' });
-        const supervisor = await User.findOne({ email: 'supervisor@dms.com' });
+        let driver = await User.findOne({ email: 'driver@dms.com' });
+        if (!driver) {
+            console.log('Creating driver...');
+            driver = await User.create({
+                name: 'John Driver',
+                email: 'driver@dms.com',
+                password: 'password',
+                role: 'DRIVER'
+            });
+        }
 
-        if (!driver || !supervisor) {
-            console.log('Driver or Supervisor not found. Please register them first.');
-            process.exit(1);
+        let supervisor = await User.findOne({ email: 'supervisor@dms.com' });
+        if (!supervisor) {
+            console.log('Creating supervisor...');
+            supervisor = await User.create({
+                name: 'Jane Supervisor',
+                email: 'supervisor@dms.com',
+                password: 'password',
+                role: 'SUPERVISOR'
+            });
         }
 
         console.log('Clearing old events/alerts...');
