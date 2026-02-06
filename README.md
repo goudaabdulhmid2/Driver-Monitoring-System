@@ -4,8 +4,8 @@ A real-time driver monitoring system built with a Node.js/Express backend and a 
 
 ## Prerequisites
 
--   [Node.js](https://nodejs.org/) (v16+ recommended)
--   [Docker](https://www.docker.com/) & Docker Compose (for the database)
+-   [Docker](https://www.docker.com/) & Docker Compose (Recommended)
+-   [Node.js](https://nodejs.org/) (Only required for manual setup)
 
 ## Project Structure
 
@@ -13,55 +13,42 @@ A real-time driver monitoring system built with a Node.js/Express backend and a 
 -   `frontend/`: React + Vite client application
 -   `docker-compose.yml`: MongoDB service configuration
 
-## Setup Instructions
+## Quick Start (Docker)
 
-### 1. Database Setup
+The easiest way to run the project is using Docker Compose.
 
-Start the MongoDB instance using Docker Compose from the root directory:
+1.  **Clone the repository**.
+2.  **Start the application**:
+    ```bash
+    docker-compose up --build
+    ```
 
-```bash
-docker-compose up -d
-```
+The services will be available at:
+-   **Frontend**: [http://localhost:5173](http://localhost:5173)
+-   **Backend**: [http://localhost:5000](http://localhost:5000)
+-   **MongoDB**: `localhost:27017`
 
-This will start a MongoDB container listening on port `27017`.
+## Manual Setup (Alternative)
 
-### 2. Backend Setup
+If you prefer to run locally without Docker:
 
-Navigate to the `backend` directory, install dependencies, and start the server.
+### 1. Database
+Start MongoDB locally or use a cloud instance.
 
+### 2. Backend
 ```bash
 cd backend
 npm install
-```
-
-**Environment Variables:**
-Ensure a `.env` file exists in the `backend/` directory with the following content (or adjust as needed):
-
-```env
-MONGO_URI=mongodb://127.0.0.1:27017/driver_monitoring
-PORT=5000
-JWT_SECRET=supersecretkey123
-```
-
-**Start the Server:**
-
-```bash
+# Create .env file with MONGO_URI, PORT, JWT_SECRET
 npm start
 ```
 
-The backend API will run on `http://localhost:5000`.
-
-### 3. Frontend Setup
-
-Navigate to the `frontend` directory, install dependencies, and start the development server.
-
+### 3. Frontend
 ```bash
 cd frontend
 npm install
 npm run dev
 ```
-
-The frontend application will be available at `http://localhost:5173` (or the port shown in your terminal).
 
 ## Features
 
