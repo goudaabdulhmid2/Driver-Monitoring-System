@@ -1,12 +1,14 @@
 import { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
+import { useTheme } from '../context/ThemeContext';
 import { useNavigate, Link } from 'react-router-dom';
-import { User, Lock, Activity } from 'lucide-react';
+import { User, Lock, Activity, Sun, Moon } from 'lucide-react';
 
 const Login = () => {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const { login } = useAuth();
+    const { theme, toggleTheme } = useTheme();
     const navigate = useNavigate();
     const [loading, setLoading] = useState(false);
 
@@ -23,7 +25,10 @@ const Login = () => {
     };
 
     return (
-        <div className="login-container">
+        <div className="login-container" style={{ position: 'relative' }}>
+            <button onClick={toggleTheme} style={{ position: 'absolute', top: '24px', left: '24px', background: 'rgba(255, 255, 255, 0.1)', border: '1px solid var(--border-color)', borderRadius: '50%', width: '40px', height: '40px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: 'var(--text-secondary)' }}>
+                {theme === 'dark' ? <Sun size={20} /> : <Moon size={20} />}
+            </button>
             <div className="login-card">
                 <div className="login-header">
                     <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '16px', color: 'var(--accent-blue)' }}>

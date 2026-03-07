@@ -1,6 +1,8 @@
 import { useEffect, useState, useRef } from 'react';
 import io from 'socket.io-client';
 import axios from 'axios';
+import { useAuth } from '../context/AuthContext';
+import { useTheme } from '../context/ThemeContext';
 import {
     Bell,
     Activity,
@@ -19,15 +21,14 @@ import {
     LayoutDashboard
 } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
-import { useAuth } from '../context/AuthContext';
 
 const SupervisorDashboard = () => {
     const { user, logout } = useAuth();
+    const { theme, toggleTheme } = useTheme();
     const [alerts, setAlerts] = useState([]);
-    const [stats, setStats] = useState({ drowsiness: 0, distraction: 0, phone: 0 });
+    const [stats, setStats] = useState({ drowsiness: 0, distraction: 0, phone: 0, no_face: 0, no_seatbelt: 0 });
 
     // UI State
-    const [theme, setTheme] = useState('dark');
     const [currentView, setCurrentView] = useState('dashboard');
     const [selectedSnapshot, setSelectedSnapshot] = useState(null);
     const [drivers, setDrivers] = useState([]);
@@ -39,16 +40,12 @@ const SupervisorDashboard = () => {
     const peerRef = useRef();
 
     useEffect(() => {
-        document.body.className = theme === 'light' ? 'light-theme' : '';
-    }, [theme]);
-
-    useEffect(() => {
         const fetchInitialData = async () => {
             try {
-                const alertsRes = await axios.get('http://localhost:5000/api/alerts');
+                const alertsRes = await axios.get('http://localhost:8080/api/alerts');
                 setAlerts(alertsRes.data);
                 calculateStats(alertsRes.data);
-                const driversRes = await axios.get('http://localhost:5000/api/users/drivers');
+                const driversRes = await axios.get('http://localhost:8080/api/users/drivers');
                 setDrivers(driversRes.data);
             } catch (error) {
                 console.error("Failed to fetch data", error);
@@ -56,7 +53,7 @@ const SupervisorDashboard = () => {
         };
         fetchInitialData();
 
-        socketRef.current = io('http://localhost:5000');
+        socketRef.current = io('http://localhost:8080');
         socketRef.current.emit('join_supervisor');
 
         socketRef.current.on('new_alert', (alert) => {
@@ -82,7 +79,7 @@ const SupervisorDashboard = () => {
         setActiveDriverId(driverId);
         setSelectedSnapshot(null); // Clear snapshot if any
 
-        const roomId = `stream_${driverId}`;
+        const roomId = `stream_${driverId} `;
         socketRef.current.emit('join_stream_room', roomId);
         console.log("Joined stream room for live view:", roomId);
     };
@@ -154,31 +151,35 @@ const SupervisorDashboard = () => {
     };
 
     const calculateStats = (data) => {
-        const counts = { drowsiness: 0, distraction: 0, phone: 0 };
+        const counts = { drowsiness: 0, distraction: 0, phone: 0, no_face: 0, no_seatbelt: 0 };
         data.forEach(a => {
             const type = a.eventId.eventType;
             if (type === 'DROWSINESS') counts.drowsiness++;
             if (type === 'DISTRACTION') counts.distraction++;
             if (type === 'PHONE_USAGE') counts.phone++;
+            if (type === 'NO_FACE') counts.no_face++;
+            if (type === 'NO_SEATBELT') counts.no_seatbelt++;
         });
         setStats(counts);
     };
-
-    const toggleTheme = () => setTheme(prev => prev === 'dark' ? 'light' : 'dark');
 
     const chartData = [
         { name: 'Drowsiness', value: stats.drowsiness, color: '#3b82f6' },
         { name: 'Distraction', value: stats.distraction, color: '#ef4444' },
         { name: 'Phone', value: stats.phone, color: '#22c55e' },
+        { name: 'No Face', value: stats.no_face, color: '#a855f7' },
+        { name: 'No Seatbelt', value: stats.no_seatbelt, color: '#f59e0b' },
     ];
 
     const formatTime = (isoString) => new Date(isoString).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
     const getSeverityBadge = (type) => {
         switch (type) {
-            case 'DROWSINESS': return <span className="badge badge-red"><TriangleAlert size={12} /> Alert Sent</span>;
-            case 'PHONE_USAGE': return <span className="badge badge-green"><Activity size={12} /> Warning</span>;
-            case 'DISTRACTION': return <span className="badge badge-orange"><TriangleAlert size={12} /> Alert Sent</span>;
+            case 'DROWSINESS': return <span className="badge badge-red"><TriangleAlert size={12} /> Drowsiness Alerts</span>;
+            case 'PHONE_USAGE': return <span className="badge badge-orange"><Smartphone size={12} /> Phone Usage</span>;
+            case 'NO_FACE': return <span className="badge badge-red"><User size={12} /> No Face</span>;
+            case 'NO_SEATBELT': return <span className="badge badge-orange"><Activity size={12} /> No Seatbelt</span>;
+            case 'DISTRACTION': return <span className="badge badge-orange"><TriangleAlert size={12} /> Distraction</span>;
             default: return <span className="badge badge-green"><CheckCircle size={12} /> Resolved</span>;
         }
     };
@@ -213,7 +214,7 @@ const SupervisorDashboard = () => {
                             />
                         ) : selectedSnapshot ? (
                             <img
-                                src={selectedSnapshot}
+                                src={selectedSnapshot.startsWith('/uploads') ? `${import.meta.env.VITE_API_URL}${selectedSnapshot} ` : selectedSnapshot}
                                 style={{ width: '100%', height: '100%', objectFit: 'contain' }}
                                 alt="Event Snapshot"
                             />
@@ -259,6 +260,14 @@ const SupervisorDashboard = () => {
                         <div className="stat-card">
                             <span className="stat-label flex items-center gap-2"><Smartphone size={16} /> Phone Usage</span>
                             <div className="stat-value-box"><span className="stat-value">{stats.phone}</span></div>
+                        </div>
+                        <div className="stat-card">
+                            <span className="stat-label flex items-center gap-2"><User size={16} /> No Face</span>
+                            <div className="stat-value-box"><span className="stat-value">{stats.no_face}</span></div>
+                        </div>
+                        <div className="stat-card">
+                            <span className="stat-label flex items-center gap-2"><CheckCircle size={16} /> No Seatbelt</span>
+                            <div className="stat-value-box"><span className="stat-value">{stats.no_seatbelt}</span></div>
                         </div>
                         <div className="stat-card">
                             <span className="stat-label flex items-center gap-2"><Activity size={16} /> Distraction</span>
@@ -313,7 +322,7 @@ const SupervisorDashboard = () => {
                             />
                             <Bar dataKey="value" radius={[4, 4, 0, 0]} barSize={40}>
                                 {chartData.map((entry, index) => (
-                                    <Cell key={`cell-${index}`} fill={entry.color} />
+                                    <Cell key={`cell - ${index} `} fill={entry.color} />
                                 ))}
                             </Bar>
                         </BarChart>
@@ -344,7 +353,7 @@ const SupervisorDashboard = () => {
                                     <td style={{ fontWeight: 600 }}>{driver.name}</td>
                                     <td style={{ color: 'var(--text-secondary)' }}>{driver.email}</td>
                                     <td>{driver.licenseNumber}</td>
-                                    <td><span className={`badge ${driver.status === 'Active' ? 'badge-green' : 'badge-orange'}`}>{driver.status}</span></td>
+                                    <td><span className={`badge ${driver.status === 'Active' ? 'badge-green' : 'badge-orange'} `}>{driver.status}</span></td>
                                     <td>
                                         <button
                                             className="btn-primary"
@@ -383,13 +392,13 @@ const SupervisorDashboard = () => {
                     <span>Driver Monitoring System</span>
                 </div>
                 <nav className="header-nav">
-                    <button className={`nav-link ${currentView === 'dashboard' ? 'active' : ''}`} onClick={() => setCurrentView('dashboard')}>
+                    <button className={`nav - link ${currentView === 'dashboard' ? 'active' : ''} `} onClick={() => setCurrentView('dashboard')}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}><LayoutDashboard size={18} /> Dashboard</div>
                     </button>
-                    <button className={`nav-link ${currentView === 'drivers' ? 'active' : ''}`} onClick={() => setCurrentView('drivers')}>
+                    <button className={`nav - link ${currentView === 'drivers' ? 'active' : ''} `} onClick={() => setCurrentView('drivers')}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}><Users size={18} /> Drivers</div>
                     </button>
-                    <button className={`nav-link ${currentView === 'settings' ? 'active' : ''}`} onClick={() => setCurrentView('settings')}>
+                    <button className={`nav - link ${currentView === 'settings' ? 'active' : ''} `} onClick={() => setCurrentView('settings')}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}><Settings size={18} /> Settings</div>
                     </button>
                 </nav>

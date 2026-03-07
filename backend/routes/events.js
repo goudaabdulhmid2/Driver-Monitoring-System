@@ -1,6 +1,8 @@
 const express = require('express');
 const Event = require('../models/Event');
 const Alert = require('../models/Alert');
+const fs = require('fs');
+const path = require('path');
 
 const router = express.Router();
 
@@ -8,13 +10,39 @@ const router = express.Router();
 router.post('/', async (req, res) => {
     const { driverId, eventType, confidence, severity, snapshotUrl } = req.body;
 
+    let finalSnapshotUrl = snapshotUrl;
+
+    // Convert Base64 payload to File System Image
+    if (snapshotUrl && snapshotUrl.startsWith('data:image')) {
+        const matches = snapshotUrl.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
+        if (matches && matches.length === 3) {
+            const buffer = Buffer.from(matches[2], 'base64');
+            const uploadsDir = path.join(__dirname, '..', 'uploads');
+
+            // Ensure uploads directory exists
+            if (!fs.existsSync(uploadsDir)) {
+                fs.mkdirSync(uploadsDir, { recursive: true });
+            }
+
+            // Generate filename based on timestamp
+            const fileName = `snapshot_${Date.now()}.jpg`;
+            const filePath = path.join(uploadsDir, fileName);
+
+            // Write image to disk
+            fs.writeFileSync(filePath, buffer);
+
+            // Save the accessible URL
+            finalSnapshotUrl = `/uploads/${fileName}`;
+        }
+    }
+
     try {
         const event = await Event.create({
             driverId,
             eventType,
             confidence,
             severity,
-            snapshotUrl
+            snapshotUrl: finalSnapshotUrl
         });
 
         // Create Alert if severity is MEDIUM or HIGH

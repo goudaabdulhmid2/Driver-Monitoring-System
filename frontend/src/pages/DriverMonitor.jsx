@@ -3,9 +3,12 @@ import Webcam from 'react-webcam';
 import { FaceMesh } from '@mediapipe/face_mesh';
 import * as faceMeshUtils from '@mediapipe/face_mesh'; // For FACEMESH_TESSELATION etc if needed, or just hardcode
 import { drawConnectors } from '@mediapipe/drawing_utils';
+import '@tensorflow/tfjs';
+import * as cocoSsd from '@tensorflow-models/coco-ssd';
 import axios from 'axios';
-import io from 'socket.io-client';
+import { io } from 'socket.io-client';
 import { useAuth } from '../context/AuthContext';
+import { useTheme } from '../context/ThemeContext';
 import {
     Video,
     LogOut,
@@ -15,13 +18,17 @@ import {
     TriangleAlert,
     CheckCircle,
     Signal,
-    User
+    User,
+    Smartphone,
+    Sun,
+    Moon
 } from 'lucide-react';
 
 const DriverMonitor = () => {
     const webcamRef = useRef(null);
     const canvasRef = useRef(null);
     const { user, logout } = useAuth();
+    const { theme, toggleTheme } = useTheme();
     const requestRef = useRef();
 
     // State
@@ -35,6 +42,13 @@ const DriverMonitor = () => {
     // Stats for UI
     const [blinkCount, setBlinkCount] = useState(0);
     const [distractionCount, setDistractionCount] = useState(0);
+    const [phoneCount, setPhoneCount] = useState(0);
+    const [noFaceCount, setNoFaceCount] = useState(0);
+    const [noSeatbeltCount, setNoSeatbeltCount] = useState(0);
+
+    const cocoModelRef = useRef(null);
+    const lastFaceDetectTime = useRef(Date.now());
+    const aiIntervalRef = useRef(null);
 
     // Landmarks for Eyes (Mesh468)
     const LEFT_EYE = [33, 160, 158, 133, 153, 144];
@@ -42,11 +56,11 @@ const DriverMonitor = () => {
 
     useEffect(() => {
         // Initialize Socket.IO
-        socketRef.current = io('http://localhost:5000');
+        socketRef.current = io('http://localhost:8080');
 
         // Join stream room
         if (user && user._id) {
-            const roomId = `stream_${user._id}`;
+            const roomId = `stream_${user._id} `;
             socketRef.current.emit('join_stream_room', roomId);
 
             // Handle Viewer Joined
@@ -74,10 +88,55 @@ const DriverMonitor = () => {
         faceMesh.onResults(onResults);
         faceMeshRef.current = faceMesh;
 
+        // Load COCO-SSD for Phone detection
+        const loadCoco = async () => {
+            try {
+                cocoModelRef.current = await cocoSsd.load();
+                console.log("COCO-SSD loaded for phone detection");
+            } catch (err) {
+                console.error("Failed to load COCO-SSD", err);
+            }
+        };
+        loadCoco();
+
+        // Secondary Periodic AI Loop for Phone, No Face, and Seatbelt heuristic
+        aiIntervalRef.current = setInterval(() => {
+            if (!webcamRef.current || !webcamRef.current.video) return;
+            const video = webcamRef.current.video;
+            if (video.readyState !== 4) return;
+
+            // Check NO_FACE (if 3 seconds passed since last face detection)
+            if (Date.now() - lastFaceDetectTime.current > 3000) {
+                handleEvent('NO_FACE', 'No Face Detected', 'HIGH');
+                setNoFaceCount(prev => prev + 1);
+                lastFaceDetectTime.current = Date.now(); // Reset to avoid alert spam
+            }
+
+            // Check PHONE_USAGE (heavy model, so run occasionally)
+            if (cocoModelRef.current) {
+                cocoModelRef.current.detect(video).then(predictions => {
+                    // Check if a cell phone is in the predictions
+                    const phone = predictions.find(p => p.class === 'cell phone' || p.class === 'remote');
+                    if (phone && phone.score > 0.5) {
+                        handleEvent('PHONE_USAGE', 'Phone Usage Detected', 'MEDIUM');
+                        setPhoneCount(prev => prev + 1);
+                    }
+                });
+            }
+
+            // Check SEATBELT (Mock Heuristic for demonstration)
+            // Simulates a 10% chance every second to detect an unfastened seatbelt
+            if (Math.random() < 0.1) {
+                handleEvent('NO_SEATBELT', 'Seatbelt Unfastened', 'MEDIUM');
+                setNoSeatbeltCount(prev => prev + 1);
+            }
+        }, 1000);
+
         return () => {
             if (socketRef.current) socketRef.current.disconnect();
             if (requestRef.current) cancelAnimationFrame(requestRef.current);
             if (faceMeshRef.current) faceMeshRef.current.close();
+            if (aiIntervalRef.current) clearInterval(aiIntervalRef.current);
         };
     }, [user]);
 
@@ -154,6 +213,7 @@ const DriverMonitor = () => {
         canvasCtx.drawImage(results.image, 0, 0, canvasRef.current.width, canvasRef.current.height);
 
         if (results.multiFaceLandmarks && results.multiFaceLandmarks.length > 0) {
+            lastFaceDetectTime.current = Date.now(); // Face found, update timestamp
             for (const landmarks of results.multiFaceLandmarks) {
                 // Draw mesh
                 drawConnectors(canvasCtx, landmarks, faceMeshUtils.FACEMESH_TESSELATION, { color: '#C0C0C070', lineWidth: 1 });
@@ -196,7 +256,7 @@ const DriverMonitor = () => {
 
         const imageSrc = webcamRef.current.getScreenshot();
         try {
-            await axios.post('http://localhost:5000/api/events', {
+            await axios.post('http://localhost:8080/api/events', {
                 driverId: user._id,
                 eventType: type,
                 confidence: 0.9,
@@ -247,7 +307,10 @@ const DriverMonitor = () => {
 
     const getStatusColor = () => {
         if (status === 'DROWSINESS') return '#ef4444';
+        if (status === 'NO_FACE') return '#ef4444';
         if (status === 'DISTRACTION') return '#f59e0b';
+        if (status === 'PHONE_USAGE') return '#f59e0b';
+        if (status === 'NO_SEATBELT') return '#f59e0b';
         return '#22c55e';
     };
 
@@ -266,6 +329,9 @@ const DriverMonitor = () => {
                     <div style={{ width: 32, height: 32, borderRadius: '50%', background: '#3b82f6', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                         <User size={18} color="white" />
                     </div>
+                    <button onClick={toggleTheme} className="btn-primary" style={{ padding: '6px 12px', fontSize: '0.8rem', marginLeft: '10px', background: 'var(--bg-card)', border: '1px solid var(--border-color)', color: 'var(--text-secondary)' }}>
+                        {theme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
+                    </button>
                     <button onClick={logout} className="btn-primary" style={{ padding: '6px 12px', fontSize: '0.8rem', marginLeft: '10px', background: 'var(--bg-card)', border: '1px solid var(--border-color)', color: 'var(--text-secondary)' }}>
                         <LogOut size={16} />
                     </button>
@@ -358,6 +424,24 @@ const DriverMonitor = () => {
                                 <span className="stat-label flex items-center gap-2"><EyeOff size={16} /> Eyes Closed Events</span>
                                 <div className="stat-value-box">
                                     <span className="stat-value">{blinkCount}</span>
+                                </div>
+                            </div>
+                            <div className="stat-card">
+                                <span className="stat-label flex items-center gap-2"><Smartphone size={16} /> Phone Usage</span>
+                                <div className="stat-value-box">
+                                    <span className="stat-value">{phoneCount}</span>
+                                </div>
+                            </div>
+                            <div className="stat-card">
+                                <span className="stat-label flex items-center gap-2"><User size={16} /> No Face</span>
+                                <div className="stat-value-box">
+                                    <span className="stat-value">{noFaceCount}</span>
+                                </div>
+                            </div>
+                            <div className="stat-card">
+                                <span className="stat-label flex items-center gap-2"><CheckCircle size={16} /> No Seatbelt</span>
+                                <div className="stat-value-box">
+                                    <span className="stat-value">{noSeatbeltCount}</span>
                                 </div>
                             </div>
                             <div className="stat-card">
