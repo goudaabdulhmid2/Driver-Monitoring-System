@@ -8,7 +8,7 @@ const router = express.Router();
 
 // @route POST /api/events
 router.post('/', async (req, res) => {
-    const { driverId, eventType, confidence, severity, snapshotUrl } = req.body;
+    const { driverId, eventType, confidence, severity, snapshotUrl, source } = req.body;
 
     let finalSnapshotUrl = snapshotUrl;
 
@@ -19,21 +19,29 @@ router.post('/', async (req, res) => {
             const buffer = Buffer.from(matches[2], 'base64');
             const uploadsDir = path.join(__dirname, '..', 'uploads');
 
-            // Ensure uploads directory exists
             if (!fs.existsSync(uploadsDir)) {
                 fs.mkdirSync(uploadsDir, { recursive: true });
             }
 
-            // Generate filename based on timestamp
             const fileName = `snapshot_${Date.now()}.jpg`;
             const filePath = path.join(uploadsDir, fileName);
 
-            // Write image to disk
             fs.writeFileSync(filePath, buffer);
-
-            // Save the accessible URL
             finalSnapshotUrl = `/uploads/${fileName}`;
         }
+    }
+
+    // Auto-map severity if missing/incorrect, or just enforce rule
+    let finalSeverity = severity;
+    let scoreDeduction = 0;
+
+    switch (eventType) {
+        case 'DROWSINESS': finalSeverity = 'CRITICAL'; scoreDeduction = 10; break;
+        case 'NO_FACE': finalSeverity = 'HIGH'; scoreDeduction = 6; break;
+        case 'PHONE_USAGE': finalSeverity = 'MEDIUM'; scoreDeduction = 5; break;
+        case 'DISTRACTION': finalSeverity = 'MEDIUM'; scoreDeduction = 4; break;
+        case 'NO_SEATBELT': finalSeverity = 'MEDIUM'; scoreDeduction = 3; break;
+        default: finalSeverity = 'LOW'; scoreDeduction = 0; break;
     }
 
     try {
@@ -41,21 +49,43 @@ router.post('/', async (req, res) => {
             driverId,
             eventType,
             confidence,
-            severity,
-            snapshotUrl: finalSnapshotUrl
+            severity: finalSeverity,
+            snapshotUrl: finalSnapshotUrl,
+            source: source || 'SYSTEM'
         });
 
-        // Create Alert if severity is MEDIUM or HIGH
-        if (severity === 'MEDIUM' || severity === 'HIGH') {
+        const DriverProfile = require('../models/DriverProfile');
+
+        // Update Driver's real-time state and safety score
+        const profile = await DriverProfile.findOneAndUpdate(
+            { userId: driverId },
+            {
+                $inc: { safetyScore: -scoreDeduction },
+                $set: { currentStatus: eventType } // Simplified current status tracking
+            },
+            { new: true }
+        );
+
+        // Normalize score to floor of 0
+        if (profile && profile.safetyScore < 0) {
+            profile.safetyScore = 0;
+            await profile.save();
+        }
+
+        // Broadcast Driver Profile Update
+        if (req.io && profile) {
+            req.io.emit('driver_status_update', profile);
+        }
+
+        // Create Alert if severity is stringer than LOW
+        if (finalSeverity === 'MEDIUM' || finalSeverity === 'HIGH' || finalSeverity === 'CRITICAL') {
             const alert = await Alert.create({
                 eventId: event._id,
                 driverId,
-                status: 'NEW'
+                status: 'ACTIVE'
             });
 
-            // Emit real-time alert to Supervisors
             if (req.io) {
-                // Fetch driver details to send with alert
                 const detailedAlert = await Alert.findById(alert._id)
                     .populate('driverId', 'name email')
                     .populate('eventId');

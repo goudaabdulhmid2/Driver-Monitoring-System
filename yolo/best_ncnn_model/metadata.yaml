@@ -1,0 +1,29 @@
+description: Ultralytics YOLO11n model trained on /content/Driver-behaviors-1/data.yaml
+author: Ultralytics
+date: '2026-02-24T23:16:07.041049'
+version: 8.4.14
+license: AGPL-3.0 License (https://ultralytics.com/license)
+docs: https://docs.ultralytics.com
+stride: 32
+task: detect
+batch: 1
+imgsz:
+- 640
+- 640
+names:
+  0: '0'
+  1: Mobile phone
+  2: Phone using
+  3: Seat-belt
+  4: cell phone
+  5: cigarette
+  6: my-phone
+  7: phone
+  8: seatbelt
+  9: smoke
+  10: smoking
+args:
+  batch: 1
+  half: false
+channels: 3
+end2end: false

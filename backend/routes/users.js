@@ -18,6 +18,8 @@ router.get('/drivers', async (req, res) => {
                 licenseNumber: profile?.licenseNumber || 'N/A',
                 vehicleId: profile?.vehicleId || 'N/A',
                 status: profile?.status || 'Unknown',
+                currentStatus: profile?.currentStatus || 'NORMAL',
+                safetyScore: profile?.safetyScore ?? 100,
                 lastActiveAt: profile?.lastActiveAt
             };
         }));

@@ -11,7 +11,8 @@ A real-time driver monitoring system built with a Node.js/Express backend and a 
 
 -   `backend/`: Node.js + Express API server
 -   `frontend/`: React + Vite client application
--   `docker-compose.yml`: MongoDB service configuration
+-   `yolo/`: Python AI monitoring module for object detection
+-   `docker-compose.yml`: Orchestrates all services
 
 ## Quick Start (Docker)
 
@@ -20,13 +21,14 @@ The easiest way to run the project is using Docker Compose.
 1.  **Clone the repository**.
 2.  **Start the application**:
     ```bash
-    docker-compose up --build
+    docker-compose up --build -d
     ```
 
 The services will be available at:
 -   **Frontend**: [http://localhost:5173](http://localhost:5173)
--   **Backend**: [http://localhost:5000](http://localhost:5000)
+-   **Backend**: [http://localhost:8080](http://localhost:8080)
 -   **MongoDB**: `localhost:27017`
+-   **YOLO AI**: Runs headlessly. If running on a Raspberry Pi or device with a physical camera, uncomment the `devices: - "/dev/video0:/dev/video0"` block under the `yolo` service in `docker-compose.yml`.
 
 ## Manual Setup (Alternative)
 

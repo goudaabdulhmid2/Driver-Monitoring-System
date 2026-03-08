@@ -18,9 +18,10 @@ import {
     Moon,
     Users,
     Settings,
-    LayoutDashboard
+    LayoutDashboard,
+    Sliders
 } from 'lucide-react';
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, AreaChart, Area, PieChart, Pie, Legend } from 'recharts';
 
 const SupervisorDashboard = () => {
     const { user, logout } = useAuth();
@@ -32,6 +33,7 @@ const SupervisorDashboard = () => {
     const [currentView, setCurrentView] = useState('dashboard');
     const [selectedSnapshot, setSelectedSnapshot] = useState(null);
     const [drivers, setDrivers] = useState([]);
+    const [eventFrequency, setEventFrequency] = useState([]); // for AreaChart
 
     // Live View State
     const [activeDriverId, setActiveDriverId] = useState(null);
@@ -45,6 +47,7 @@ const SupervisorDashboard = () => {
                 const alertsRes = await axios.get('http://localhost:8080/api/alerts');
                 setAlerts(alertsRes.data);
                 calculateStats(alertsRes.data);
+                generateEventFrequency(alertsRes.data);
                 const driversRes = await axios.get('http://localhost:8080/api/users/drivers');
                 setDrivers(driversRes.data);
             } catch (error) {
@@ -60,11 +63,25 @@ const SupervisorDashboard = () => {
             setAlerts((prev) => {
                 const updated = [alert, ...prev];
                 calculateStats(updated);
+                generateEventFrequency(updated);
                 return updated;
             });
-            if (alert.eventId.severity === 'HIGH') {
+            if (alert.eventId.severity === 'HIGH' || alert.eventId.severity === 'CRITICAL') {
                 setSelectedSnapshot(alert.eventId.snapshotUrl);
             }
+        });
+
+        socketRef.current.on('alert_updated', (updatedAlert) => {
+            setAlerts((prev) => prev.map(a => a._id === updatedAlert._id ? updatedAlert : a));
+        });
+
+        socketRef.current.on('driver_status_update', (updatedProfile) => {
+            setDrivers((prev) => prev.map(d => {
+                if (d._id === updatedProfile.userId) {
+                    return { ...d, currentStatus: updatedProfile.currentStatus, safetyScore: updatedProfile.safetyScore };
+                }
+                return d;
+            }));
         });
 
         // WebRTC Handlers
@@ -153,7 +170,7 @@ const SupervisorDashboard = () => {
     const calculateStats = (data) => {
         const counts = { drowsiness: 0, distraction: 0, phone: 0, no_face: 0, no_seatbelt: 0 };
         data.forEach(a => {
-            const type = a.eventId.eventType;
+            const type = a.eventId?.eventType;
             if (type === 'DROWSINESS') counts.drowsiness++;
             if (type === 'DISTRACTION') counts.distraction++;
             if (type === 'PHONE_USAGE') counts.phone++;
@@ -161,6 +178,32 @@ const SupervisorDashboard = () => {
             if (type === 'NO_SEATBELT') counts.no_seatbelt++;
         });
         setStats(counts);
+    };
+
+    const generateEventFrequency = (data) => {
+        const frequencyMap = {};
+        data.forEach(a => {
+            if (!a.createdAt) return;
+            const date = new Date(a.createdAt).toLocaleDateString([], { month: 'short', day: 'numeric' });
+            frequencyMap[date] = (frequencyMap[date] || 0) + 1;
+        });
+        // Convert to array and sort chronologically (assuming keys are reasonably sortable by Date parsing)
+        const sortedArray = Object.keys(frequencyMap)
+            .sort((x, y) => new Date(x) - new Date(y))
+            .map(date => ({ date, count: frequencyMap[date] }));
+        setEventFrequency(sortedArray);
+    };
+
+    const updateAlertStatus = async (alertId, newStatus) => {
+        try {
+            await axios.put(`http://localhost:8080/api/alerts/${alertId}`, {
+                status: newStatus,
+                supervisorId: user._id
+            });
+            // State is updated via socket 'alert_updated'
+        } catch (error) {
+            console.error("Failed to update alert status", error);
+        }
     };
 
     const chartData = [
@@ -173,15 +216,33 @@ const SupervisorDashboard = () => {
 
     const formatTime = (isoString) => new Date(isoString).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
-    const getSeverityBadge = (type) => {
+    const getSeverityBadge = (type, severity) => {
+        if (severity === 'CRITICAL') return <span className="badge badge-red" style={{ background: 'rgba(239, 68, 68, 0.4)' }}><TriangleAlert size={12} /> CRITICAL</span>;
+
         switch (type) {
             case 'DROWSINESS': return <span className="badge badge-red"><TriangleAlert size={12} /> Drowsiness Alerts</span>;
             case 'PHONE_USAGE': return <span className="badge badge-orange"><Smartphone size={12} /> Phone Usage</span>;
             case 'NO_FACE': return <span className="badge badge-red"><User size={12} /> No Face</span>;
             case 'NO_SEATBELT': return <span className="badge badge-orange"><Activity size={12} /> No Seatbelt</span>;
             case 'DISTRACTION': return <span className="badge badge-orange"><TriangleAlert size={12} /> Distraction</span>;
-            default: return <span className="badge badge-green"><CheckCircle size={12} /> Resolved</span>;
+            default: return <span className="badge badge-green"><CheckCircle size={12} /> Unknown</span>;
         }
+    };
+
+    const getAlertStatusBadge = (status) => {
+        switch (status) {
+            case 'ACTIVE': return <span className="badge badge-red">Active</span>;
+            case 'ACKNOWLEDGED': return <span className="badge badge-orange">Acknowledged</span>;
+            case 'RESOLVED': return <span className="badge badge-green">Resolved</span>;
+            case 'DISMISSED': return <span className="badge" style={{ color: '#a0a0a0', background: 'rgba(255,255,255,0.1)' }}>Dismissed</span>;
+            default: return <span className="badge">New</span>;
+        }
+    };
+
+    const getDriverStatusBadge = (status) => {
+        if (status === 'NORMAL') return <span className="badge badge-green"><CheckCircle size={12} /> Normal</span>;
+        if (['PHONE_USAGE', 'NO_SEATBELT', 'DISTRACTION'].includes(status)) return <span className="badge badge-orange"><TriangleAlert size={12} /> Warning</span>;
+        return <span className="badge badge-red"><TriangleAlert size={12} /> Danger</span>;
     };
 
     const renderDashboard = () => (
@@ -287,7 +348,9 @@ const SupervisorDashboard = () => {
                                     <th>Time</th>
                                     <th>Event</th>
                                     <th>Driver</th>
+                                    <th>Severity</th>
                                     <th>Status</th>
+                                    <th>Actions</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -301,7 +364,20 @@ const SupervisorDashboard = () => {
                                         <td style={{ color: 'var(--text-secondary)' }}>{formatTime(alert.createdAt)}</td>
                                         <td style={{ fontWeight: 500 }}>{alert.eventId.eventType}</td>
                                         <td>{alert.driverId.name}</td>
-                                        <td>{getSeverityBadge(alert.eventId.eventType)}</td>
+                                        <td>{getSeverityBadge(alert.eventId.eventType, alert.eventId.severity)}</td>
+                                        <td>{getAlertStatusBadge(alert.status)}</td>
+                                        <td>
+                                            {alert.status === 'ACTIVE' && (
+                                                <div style={{ display: 'flex', gap: '4px' }}>
+                                                    <button onClick={(e) => { e.stopPropagation(); updateAlertStatus(alert._id, 'ACKNOWLEDGED'); }} className="btn-primary" style={{ padding: '2px 6px', fontSize: '0.7rem', background: '#f59e0b' }}>Ack</button>
+                                                    <button onClick={(e) => { e.stopPropagation(); updateAlertStatus(alert._id, 'RESOLVED'); }} className="btn-primary" style={{ padding: '2px 6px', fontSize: '0.7rem', background: '#22c55e' }}>Resolve</button>
+                                                    <button onClick={(e) => { e.stopPropagation(); updateAlertStatus(alert._id, 'DISMISSED'); }} className="btn-primary" style={{ padding: '2px 6px', fontSize: '0.7rem', background: 'transparent', border: '1px solid #555', color: '#a0a0a0' }}>Dismiss</button>
+                                                </div>
+                                            )}
+                                            {alert.status === 'ACKNOWLEDGED' && (
+                                                <button onClick={(e) => { e.stopPropagation(); updateAlertStatus(alert._id, 'RESOLVED'); }} className="btn-primary" style={{ padding: '2px 6px', fontSize: '0.7rem', background: '#22c55e' }}>Resolve</button>
+                                            )}
+                                        </td>
                                     </tr>
                                 ))}
                             </tbody>
@@ -322,7 +398,7 @@ const SupervisorDashboard = () => {
                             />
                             <Bar dataKey="value" radius={[4, 4, 0, 0]} barSize={40}>
                                 {chartData.map((entry, index) => (
-                                    <Cell key={`cell - ${index} `} fill={entry.color} />
+                                    <Cell key={`cell-${index}`} fill={entry.color} />
                                 ))}
                             </Bar>
                         </BarChart>
@@ -335,25 +411,32 @@ const SupervisorDashboard = () => {
     const renderDrivers = () => (
         <div className="dashboard-grid" style={{ gridTemplateColumns: '1fr' }}>
             <div className="card-glass">
-                <div className="card-title">Fleet Drivers</div>
+                <div className="card-title">Fleet Drivers Risk Ranking</div>
                 <div className="table-container" style={{ maxHeight: 'none' }}>
                     <table>
                         <thead>
                             <tr>
                                 <th>Name</th>
                                 <th>Email</th>
-                                <th>License ID</th>
-                                <th>Status</th>
+                                <th>Safety Score</th>
+                                <th>Real-Time Status</th>
                                 <th>Actions</th>
                             </tr>
                         </thead>
                         <tbody>
-                            {drivers.map(driver => (
+                            {[...drivers].sort((a, b) => a.safetyScore - b.safetyScore).map(driver => (
                                 <tr key={driver._id}>
                                     <td style={{ fontWeight: 600 }}>{driver.name}</td>
                                     <td style={{ color: 'var(--text-secondary)' }}>{driver.email}</td>
-                                    <td>{driver.licenseNumber}</td>
-                                    <td><span className={`badge ${driver.status === 'Active' ? 'badge-green' : 'badge-orange'} `}>{driver.status}</span></td>
+                                    <td>
+                                        <span style={{
+                                            fontWeight: 'bold',
+                                            color: driver.safetyScore < 60 ? '#ef4444' : driver.safetyScore < 80 ? '#f59e0b' : '#22c55e'
+                                        }}>
+                                            {driver.safetyScore}/100
+                                        </span>
+                                    </td>
+                                    <td>{getDriverStatusBadge(driver.currentStatus)}</td>
                                     <td>
                                         <button
                                             className="btn-primary"
@@ -372,14 +455,147 @@ const SupervisorDashboard = () => {
                     </table>
                 </div>
             </div>
+
+            <div className="card-glass" style={{ height: '350px' }}>
+                <div className="card-title">Event Frequency Over Time</div>
+                <ResponsiveContainer width="100%" height={300}>
+                    <AreaChart data={eventFrequency} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
+                        <defs>
+                            <linearGradient id="colorFreq" x1="0" y1="0" x2="0" y2="1">
+                                <stop offset="5%" stopColor="#ef4444" stopOpacity={0.3} />
+                                <stop offset="95%" stopColor="#ef4444" stopOpacity={0} />
+                            </linearGradient>
+                        </defs>
+                        <XAxis dataKey="date" stroke="var(--text-secondary)" fontSize={12} tickLine={false} axisLine={false} />
+                        <YAxis stroke="var(--text-secondary)" fontSize={12} tickLine={false} axisLine={false} />
+                        <Tooltip contentStyle={{ backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)', borderRadius: '8px' }} />
+                        <Area type="monotone" dataKey="count" stroke="#ef4444" fillOpacity={1} fill="url(#colorFreq)" />
+                    </AreaChart>
+                </ResponsiveContainer>
+            </div>
         </div>
     );
 
+    const [settings, setSystemSettings] = useState({
+        drowsiness_threshold: 10,
+        no_face_timeout: 3,
+        phone_detection_sensitivity: 'High',
+        alert_sound_enabled: true,
+        critical_alert_notifications: true,
+        snapshot_capture_enabled: true
+    });
+
+    const handleSettingChange = (key, value) => {
+        setSystemSettings(prev => ({ ...prev, [key]: value }));
+    };
+
     const renderSettings = () => (
         <div className="dashboard-grid" style={{ gridTemplateColumns: '1fr' }}>
-            <div className="card-glass">
-                <div className="card-title">System Settings</div>
-                <p style={{ color: 'var(--text-secondary)' }}>Configuration options placeholder.</p>
+            <div className="card-glass" style={{ maxWidth: '800px', margin: '0 auto', width: '100%' }}>
+                <div className="card-title">System Configuration</div>
+
+                <div style={{ marginBottom: '24px' }}>
+                    <h3 style={{ fontSize: '1rem', marginBottom: '16px', color: 'var(--accent-blue)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <Sliders size={18} /> Detection Thresholds
+                    </h3>
+
+                    <div style={{ display: 'grid', gap: '16px', backgroundColor: 'rgba(255,255,255,0.02)', padding: '16px', borderRadius: '8px' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <div>
+                                <div style={{ fontWeight: 500 }}>Drowsiness Threshold (seconds)</div>
+                                <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Time before eyes closed triggers HIGH alert</div>
+                            </div>
+                            <input
+                                type="number"
+                                value={settings.drowsiness_threshold}
+                                onChange={(e) => handleSettingChange('drowsiness_threshold', parseInt(e.target.value))}
+                                style={{ background: 'var(--bg-dark)', border: '1px solid var(--border-color)', color: 'var(--text-primary)', padding: '8px', borderRadius: '4px', width: '80px' }}
+                            />
+                        </div>
+
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <div>
+                                <div style={{ fontWeight: 500 }}>No Face Timeout (seconds)</div>
+                                <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Time before missing face triggers alert</div>
+                            </div>
+                            <input
+                                type="number"
+                                value={settings.no_face_timeout}
+                                onChange={(e) => handleSettingChange('no_face_timeout', parseInt(e.target.value))}
+                                style={{ background: 'var(--bg-dark)', border: '1px solid var(--border-color)', color: 'var(--text-primary)', padding: '8px', borderRadius: '4px', width: '80px' }}
+                            />
+                        </div>
+
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <div>
+                                <div style={{ fontWeight: 500 }}>Phone Detection Sensitivity</div>
+                                <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>AI confidence required for phone detection</div>
+                            </div>
+                            <select
+                                value={settings.phone_detection_sensitivity}
+                                onChange={(e) => handleSettingChange('phone_detection_sensitivity', e.target.value)}
+                                style={{ background: 'var(--bg-dark)', border: '1px solid var(--border-color)', color: 'var(--text-primary)', padding: '8px', borderRadius: '4px', width: '100px' }}
+                            >
+                                <option>Low</option>
+                                <option>Medium</option>
+                                <option>High</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <div style={{ marginBottom: '24px' }}>
+                    <h3 style={{ fontSize: '1rem', marginBottom: '16px', color: 'var(--accent-orange)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <Bell size={18} /> Alert Settings
+                    </h3>
+
+                    <div style={{ display: 'grid', gap: '16px', backgroundColor: 'rgba(255,255,255,0.02)', padding: '16px', borderRadius: '8px' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <div>
+                                <div style={{ fontWeight: 500 }}>Enable Alert Sounds</div>
+                                <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Play sound when new alert arrives</div>
+                            </div>
+                            <input
+                                type="checkbox"
+                                checked={settings.alert_sound_enabled}
+                                onChange={(e) => handleSettingChange('alert_sound_enabled', e.target.checked)}
+                                style={{ width: '18px', height: '18px' }}
+                            />
+                        </div>
+
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <div>
+                                <div style={{ fontWeight: 500 }}>Critical Alert Notifications</div>
+                                <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Show browser notifications for CRITICAL events</div>
+                            </div>
+                            <input
+                                type="checkbox"
+                                checked={settings.critical_alert_notifications}
+                                onChange={(e) => handleSettingChange('critical_alert_notifications', e.target.checked)}
+                                style={{ width: '18px', height: '18px' }}
+                            />
+                        </div>
+
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <div>
+                                <div style={{ fontWeight: 500 }}>Capture Snapshots</div>
+                                <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Save image frames on violations</div>
+                            </div>
+                            <input
+                                type="checkbox"
+                                checked={settings.snapshot_capture_enabled}
+                                onChange={(e) => handleSettingChange('snapshot_capture_enabled', e.target.checked)}
+                                style={{ width: '18px', height: '18px' }}
+                            />
+                        </div>
+                    </div>
+                </div>
+
+                <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '16px' }}>
+                    <button className="btn-primary" onClick={() => alert('Settings saved successfully! (Mock)')}>
+                        Save Configuration
+                    </button>
+                </div>
             </div>
         </div>
     );

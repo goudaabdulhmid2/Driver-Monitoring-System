@@ -10,10 +10,11 @@ const eventSchema = new mongoose.Schema({
     confidence: { type: Number, required: true },
     severity: {
         type: String,
-        enum: ['LOW', 'MEDIUM', 'HIGH'],
+        enum: ['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'],
         required: true
     },
     snapshotUrl: { type: String }, // Optional, only for privacy-approved violations
+    source: { type: String, enum: ['AI', 'MANUAL', 'SYSTEM'], default: 'SYSTEM' },
     timestamp: { type: Date, default: Date.now }
 }, { timestamps: true });
 
