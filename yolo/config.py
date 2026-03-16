@@ -21,6 +21,7 @@ DRIVER_ID = os.environ.get("DRIVER_ID", "CHANGEME")
 
 MODEL_PATH = os.environ.get("MODEL_PATH", "best_ncnn_model")
 RESOLUTION = os.environ.get("RESOLUTION", "900x900")
+IP_CAMERA_URL = os.environ.get("IP_CAMERA_URL", "")
 MIN_THRESH = float(os.environ.get("MIN_THRESH", 0.5))
 ALERT_COOLDOWN = float(os.environ.get("ALERT_COOLDOWN", 2.0))
 

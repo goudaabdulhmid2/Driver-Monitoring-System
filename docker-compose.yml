@@ -47,6 +47,7 @@ services:
       - SHOW_VIDEO=False
       - FLASK_PORT=5001
       - DRIVER_ID=CHANGEME
+      - IP_CAMERA_URL=${IP_CAMERA_URL:-}
     depends_on:
       - backend
     restart: unless-stopped
