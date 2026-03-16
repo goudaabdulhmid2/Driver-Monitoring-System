@@ -84,9 +84,7 @@ const SupervisorDashboard = () => {
             }));
         });
 
-        // WebRTC Handlers
-        socketRef.current.on('offer', handleReceiveOffer);
-        socketRef.current.on('ice_candidate', handleNewICECandidateMsg);
+        // WebRTC Logic Removed
 
         return () => socketRef.current.close();
     }, []);
@@ -95,77 +93,13 @@ const SupervisorDashboard = () => {
         if (!driverId) return;
         setActiveDriverId(driverId);
         setSelectedSnapshot(null); // Clear snapshot if any
-
-        const roomId = `stream_${driverId} `;
-        socketRef.current.emit('join_stream_room', roomId);
-        console.log("Joined stream room for live view:", roomId);
     };
 
     const endLiveView = () => {
         setActiveDriverId(null);
-        if (peerRef.current) {
-            peerRef.current.close();
-            peerRef.current = null;
-        }
-        if (remoteVideoRef.current) {
-            remoteVideoRef.current.srcObject = null;
-        }
     };
 
-    const handleReceiveOffer = async (payload) => {
-        console.log("Received Offer from driver");
-        const peer = new RTCPeerConnection({
-            iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
-        });
-        peerRef.current = peer;
-
-        peer.ontrack = (e) => {
-            console.log("Received Remote Stream");
-            if (remoteVideoRef.current) {
-                remoteVideoRef.current.srcObject = e.streams[0];
-                remoteVideoRef.current.play().catch(err => console.error("Auto-play failed:", err));
-            }
-        };
-
-        peer.onconnectionstatechange = () => {
-            console.log("Connection State:", peer.connectionState);
-            if (peer.connectionState === 'connected') {
-                console.log("Peer Connected successfully!");
-            }
-            if (peer.connectionState === 'failed' || peer.connectionState === 'disconnected') {
-                console.error("Peer connection failed/disconnected");
-            }
-        };
-
-        peer.onicecandidate = (e) => {
-            if (e.candidate) {
-                const icePayload = {
-                    target: payload.caller,
-                    candidate: e.candidate
-                };
-                socketRef.current.emit('ice_candidate', icePayload);
-            }
-        };
-
-        const desc = new RTCSessionDescription(payload.sdp);
-        await peer.setRemoteDescription(desc);
-        const answer = await peer.createAnswer();
-        await peer.setLocalDescription(answer);
-
-        const answerPayload = {
-            target: payload.caller,
-            caller: socketRef.current.id,
-            sdp: peer.localDescription
-        };
-        socketRef.current.emit('answer', answerPayload);
-    };
-
-    const handleNewICECandidateMsg = (incoming) => {
-        if (peerRef.current) {
-            const candidate = new RTCIceCandidate(incoming.candidate);
-            peerRef.current.addIceCandidate(candidate).catch(e => console.error(e));
-        }
-    };
+    const videoStreamUrl = 'http://localhost:5001/video_feed';
 
     const calculateStats = (data) => {
         const counts = { drowsiness: 0, distraction: 0, phone: 0, no_face: 0, no_seatbelt: 0 };
@@ -264,15 +198,21 @@ const SupervisorDashboard = () => {
                     </div>
                     <div className="live-feed-container">
                         {activeDriverId ? (
-                            // Fix for Video Autoplay Issue: Browsers block unmuted autoplay.
-                            // Adding 'muted' ensures video plays immediately.
-                            <video
-                                ref={remoteVideoRef}
-                                autoPlay
-                                playsInline
-                                muted // Important for local testing to avoid feedback and allow autoplay
-                                style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                            />
+                            <div style={{ position: 'relative', width: '100%', height: '100%' }}>
+                                <img
+                                    src={videoStreamUrl}
+                                    style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                                    alt="Live YOLO View"
+                                    onError={(e) => {
+                                        e.target.style.display = 'none';
+                                        e.target.nextSibling.style.display = 'flex';
+                                    }}
+                                />
+                                <div style={{ display: 'none', position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', alignItems: 'center', justifyContent: 'center', background: 'black', color: '#a0a0a0', flexDirection: 'column', gap: '10px' }}>
+                                    <Video size={48} />
+                                    <span>YOLO Edge Stream Offline</span>
+                                </div>
+                            </div>
                         ) : selectedSnapshot ? (
                             <img
                                 src={selectedSnapshot.startsWith('/uploads') ? `${import.meta.env.VITE_API_URL}${selectedSnapshot} ` : selectedSnapshot}

@@ -11,12 +11,31 @@ from alarm_controller import AlarmController
 from event_sender import EventSender
 
 # ================= Flask server (For debugging/viewing latest frame) =================
+from flask_cors import CORS
+
 app = Flask(__name__)
+CORS(app) # Allow frontend to access the stream
 latest_frame = None
 
 def update_latest_frame(frame):
     global latest_frame
     latest_frame = frame.copy()
+
+def generate_frames():
+    global latest_frame
+    while True:
+        if latest_frame is None:
+            time.sleep(0.1)
+            continue
+        
+        # Encode the frame in JPEG format
+        ret, jpeg = cv2.imencode(".jpg", latest_frame)
+        if not ret:
+            continue
+            
+        frame_bytes = jpeg.tobytes()
+        yield (b'--frame\r\n'
+               b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n\r\n')
 
 @app.route("/latest")
 def get_latest():
@@ -26,8 +45,13 @@ def get_latest():
     ret, jpeg = cv2.imencode(".jpg", latest_frame)
     return Response(jpeg.tobytes(), mimetype="image/jpeg")
 
+@app.route("/video_feed")
+def video_feed():
+    return Response(generate_frames(),
+                    mimetype='multipart/x-mixed-replace; boundary=frame')
+
 def run_flask():
-    app.run(host="0.0.0.0", port=config.FLASK_PORT)
+    app.run(host="0.0.0.0", port=config.FLASK_PORT, threaded=True)
 
 # ================= Main Pipeline Loop =================
 def start_pipeline():

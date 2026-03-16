@@ -1,8 +1,11 @@
 ultralytics
 opencv-python-headless
+ultralytics
+opencv-python-headless
 flask
 requests
 # NOTE: picamera2 is typically installed via apt on Raspberry Pi OS (python3-picamera2)
 # but we will include it here if installing in a generalized python env. 
 # It might fail on non-Pi hosts!
 # picamera2
+Flask-Cors==5.0.0

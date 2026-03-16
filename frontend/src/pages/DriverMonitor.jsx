@@ -1,10 +1,4 @@
-import React, { useRef, useEffect, useState } from 'react';
-import Webcam from 'react-webcam';
-import { FaceMesh } from '@mediapipe/face_mesh';
-import * as faceMeshUtils from '@mediapipe/face_mesh'; // For FACEMESH_TESSELATION etc if needed, or just hardcode
-import { drawConnectors } from '@mediapipe/drawing_utils';
-import '@tensorflow/tfjs';
-import * as cocoSsd from '@tensorflow-models/coco-ssd';
+import React, { useEffect, useState, useRef } from 'react';
 import axios from 'axios';
 import { io } from 'socket.io-client';
 import { useAuth } from '../context/AuthContext';
@@ -25,285 +19,79 @@ import {
 } from 'lucide-react';
 
 const DriverMonitor = () => {
-    const webcamRef = useRef(null);
-    const canvasRef = useRef(null);
     const { user, logout } = useAuth();
     const { theme, toggleTheme } = useTheme();
-    const requestRef = useRef();
+    const socketRef = useRef(null);
 
-    // State
     const [status, setStatus] = useState('Active');
-    const [viewerCount, setViewerCount] = useState(0);
-    const [lastAlertTime, setLastAlertTime] = useState(0);
-    const socketRef = useRef();
-    const peerRef = useRef();
-    const faceMeshRef = useRef(null);
-
-    // Stats for UI
     const [blinkCount, setBlinkCount] = useState(0);
-    const [distractionCount, setDistractionCount] = useState(0);
     const [phoneCount, setPhoneCount] = useState(0);
+    const [distractionCount, setDistractionCount] = useState(0);
     const [noFaceCount, setNoFaceCount] = useState(0);
     const [noSeatbeltCount, setNoSeatbeltCount] = useState(0);
+    const [viewerCount, setViewerCount] = useState(0);
 
-    const cocoModelRef = useRef(null);
-    const lastFaceDetectTime = useRef(Date.now());
-    const aiIntervalRef = useRef(null);
-
-    // Landmarks for Eyes (Mesh468)
-    const LEFT_EYE = [33, 160, 158, 133, 153, 144];
-    const RIGHT_EYE = [362, 385, 387, 263, 373, 380];
+    // YOLO video stream URL
+    const videoStreamUrl = 'http://localhost:5001/video_feed';
 
     useEffect(() => {
         // Initialize Socket.IO
         socketRef.current = io('http://localhost:8080');
 
-        // Join stream room
+        socketRef.current.on('connect', () => {
+             console.log("Connected to Backend Socket");
+        });
+
+        // Use Socket.io to receive real alerts triggered by YOLO instead of calculating them locally
+        socketRef.current.on('driver_status_update', (profileUpdate) => {
+            if (profileUpdate.userId === user._id) {
+               setStatus(profileUpdate.currentStatus);
+               setTimeout(() => setStatus('Active'), 3000); // Revert status display
+            }
+        });
+
+        const fetchInitStats = async () => {
+             try {
+                const alertsRes = await axios.get(`http://localhost:8080/api/events/${user._id}`);
+                const data = alertsRes.data;
+                const counts = { drowsiness: 0, distraction: 0, phone: 0, no_face: 0, no_seatbelt: 0 };
+                data.forEach(a => {
+                    const type = a.eventType;
+                    if (type === 'DROWSINESS') counts.drowsiness++;
+                    if (type === 'DISTRACTION') counts.distraction++;
+                    if (type === 'PHONE_USAGE') counts.phone++;
+                    if (type === 'NO_FACE') counts.no_face++;
+                    if (type === 'NO_SEATBELT') counts.no_seatbelt++;
+                });
+                setBlinkCount(counts.drowsiness);
+                setDistractionCount(counts.distraction);
+                setPhoneCount(counts.phone);
+                setNoFaceCount(counts.no_face);
+                setNoSeatbeltCount(counts.no_seatbelt);
+             } catch (e) {
+                console.error("Failed to load init stats", e);
+             }
+        };
+
+        fetchInitStats();
+
+        // Join stream room (for supervisor tracking if needed, though they might connect direct to MJPEG)
         if (user && user._id) {
             const roomId = `stream_${user._id} `;
             socketRef.current.emit('join_stream_room', roomId);
 
-            // Handle Viewer Joined
+            // Viewer Joined (No WebRTC logic needed anymore if MJPEG is direct, keeping just for count)
             socketRef.current.on('viewer_joined', (viewerId) => {
                 setViewerCount(prev => prev + 1);
-                handleViewerJoined(viewerId);
             });
-
-            socketRef.current.on('answer', handleAnswer);
-            socketRef.current.on('ice_candidate', handleNewICECandidateMsg);
         }
-
-        // Initialize FaceMesh
-        const faceMesh = new FaceMesh({
-            locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}`
-        });
-
-        faceMesh.setOptions({
-            maxNumFaces: 1,
-            refineLandmarks: true,
-            minDetectionConfidence: 0.5,
-            minTrackingConfidence: 0.5
-        });
-
-        faceMesh.onResults(onResults);
-        faceMeshRef.current = faceMesh;
-
-        // Load COCO-SSD for Phone detection
-        const loadCoco = async () => {
-            try {
-                cocoModelRef.current = await cocoSsd.load();
-                console.log("COCO-SSD loaded for phone detection");
-            } catch (err) {
-                console.error("Failed to load COCO-SSD", err);
-            }
-        };
-        loadCoco();
-
-        // Secondary Periodic AI Loop for Phone, No Face, and Seatbelt heuristic
-        aiIntervalRef.current = setInterval(() => {
-            if (!webcamRef.current || !webcamRef.current.video) return;
-            const video = webcamRef.current.video;
-            if (video.readyState !== 4) return;
-
-            // Check NO_FACE (if 3 seconds passed since last face detection)
-            if (Date.now() - lastFaceDetectTime.current > 3000) {
-                handleEvent('NO_FACE', 'No Face Detected', 'HIGH');
-                setNoFaceCount(prev => prev + 1);
-                lastFaceDetectTime.current = Date.now(); // Reset to avoid alert spam
-            }
-
-            // Check PHONE_USAGE (heavy model, so run occasionally)
-            if (cocoModelRef.current) {
-                cocoModelRef.current.detect(video).then(predictions => {
-                    // Check if a cell phone is in the predictions
-                    const phone = predictions.find(p => p.class === 'cell phone' || p.class === 'remote');
-                    if (phone && phone.score > 0.5) {
-                        handleEvent('PHONE_USAGE', 'Phone Usage Detected', 'MEDIUM');
-                        setPhoneCount(prev => prev + 1);
-                    }
-                });
-            }
-
-            // Check SEATBELT (Mock Heuristic for demonstration)
-            // Simulates a 10% chance every second to detect an unfastened seatbelt
-            if (Math.random() < 0.1) {
-                handleEvent('NO_SEATBELT', 'Seatbelt Unfastened', 'MEDIUM');
-                setNoSeatbeltCount(prev => prev + 1);
-            }
-        }, 1000);
 
         return () => {
             if (socketRef.current) socketRef.current.disconnect();
-            if (requestRef.current) cancelAnimationFrame(requestRef.current);
-            if (faceMeshRef.current) faceMeshRef.current.close();
-            if (aiIntervalRef.current) clearInterval(aiIntervalRef.current);
         };
     }, [user]);
 
-    const handleViewerJoined = async (viewerId) => {
-        console.log("Driver: Viewer joined signal received:", viewerId);
-        const peer = createPeer(viewerId);
-        peerRef.current = peer;
-
-        // Add Stream Tracks
-        if (webcamRef.current && webcamRef.current.stream) {
-            console.log("Driver: Adding stream tracks to peer connection");
-            webcamRef.current.stream.getTracks().forEach(track => {
-                peer.addTrack(track, webcamRef.current.stream);
-            });
-        } else {
-            console.warn("Driver: No webcam stream found to add!");
-        }
-
-        // Create Offer
-        const offer = await peer.createOffer();
-        await peer.setLocalDescription(offer);
-        const payload = {
-            target: viewerId,
-            caller: socketRef.current.id,
-            sdp: peer.localDescription
-        };
-        console.log("Driver: Sending Offer to Supervisor");
-        socketRef.current.emit('offer', payload);
-    };
-
-    const createPeer = (targetId) => {
-        const peer = new RTCPeerConnection({
-            iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
-        });
-        peer.onicecandidate = (e) => {
-            if (e.candidate) {
-                const payload = { target: targetId, candidate: e.candidate };
-                socketRef.current.emit('ice_candidate', payload);
-            }
-        };
-        return peer;
-    };
-
-    const handleAnswer = (message) => {
-        if (peerRef.current) {
-            const desc = new RTCSessionDescription(message.sdp);
-            peerRef.current.setRemoteDescription(desc).catch(e => console.error(e));
-        }
-    };
-
-    const handleNewICECandidateMsg = (incoming) => {
-        if (peerRef.current) {
-            const candidate = new RTCIceCandidate(incoming.candidate);
-            peerRef.current.addIceCandidate(candidate).catch(e => console.error(e));
-        }
-    };
-
-    const calculateEAR = (landmarks, indices) => {
-        const dist = (p1, p2) => Math.sqrt(Math.pow(p1.x - p2.x, 2) + Math.pow(p1.y - p2.y, 2));
-        const p1 = landmarks[indices[0]];
-        const p2 = landmarks[indices[1]];
-        const p3 = landmarks[indices[2]];
-        const p4 = landmarks[indices[3]];
-        const p5 = landmarks[indices[4]];
-        const p6 = landmarks[indices[5]];
-        return (dist(p2, p6) + dist(p3, p5)) / (2 * dist(p1, p4));
-    };
-
-    const onResults = async (results) => {
-        // Draw on canvas
-        const canvasCtx = canvasRef.current.getContext('2d');
-        canvasCtx.save();
-        canvasCtx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
-        canvasCtx.drawImage(results.image, 0, 0, canvasRef.current.width, canvasRef.current.height);
-
-        if (results.multiFaceLandmarks && results.multiFaceLandmarks.length > 0) {
-            lastFaceDetectTime.current = Date.now(); // Face found, update timestamp
-            for (const landmarks of results.multiFaceLandmarks) {
-                // Draw mesh
-                drawConnectors(canvasCtx, landmarks, faceMeshUtils.FACEMESH_TESSELATION, { color: '#C0C0C070', lineWidth: 1 });
-
-                // Draw eyes highlight
-                drawConnectors(canvasCtx, landmarks, faceMeshUtils.FACEMESH_RIGHT_EYE, { color: '#FF3030', lineWidth: 2 });
-                drawConnectors(canvasCtx, landmarks, faceMeshUtils.FACEMESH_LEFT_EYE, { color: '#FF3030', lineWidth: 2 });
-
-                // Logic
-                const leftEAR = calculateEAR(landmarks, LEFT_EYE);
-                const rightEAR = calculateEAR(landmarks, RIGHT_EYE);
-                const avgEAR = (leftEAR + rightEAR) / 2;
-                const EAR_THRESHOLD = 0.25;
-
-                if (avgEAR < EAR_THRESHOLD) {
-                    handleEvent('DROWSINESS', 'Drowsiness Detected', 'HIGH');
-                    setBlinkCount(prev => prev + 1);
-                }
-
-                const nose = landmarks[1];
-                const leftCheek = landmarks[234];
-                const rightCheek = landmarks[454];
-                const faceMidpoint = (leftCheek.x + rightCheek.x) / 2;
-                const yawStatus = nose.x - faceMidpoint;
-
-                if (Math.abs(yawStatus) > 0.1) {
-                    handleEvent('DISTRACTION', 'Distraction Detected', 'MEDIUM');
-                    setDistractionCount(prev => prev + 1);
-                }
-            }
-        }
-        canvasCtx.restore();
-    };
-
-    const handleEvent = async (type, desc, severity) => {
-        const now = Date.now();
-        if (now - lastAlertTime < 5000) return;
-        setLastAlertTime(now);
-        setStatus(type);
-
-        const imageSrc = webcamRef.current.getScreenshot();
-        try {
-            await axios.post('http://localhost:8080/api/events', {
-                driverId: user._id,
-                eventType: type,
-                confidence: 0.9,
-                severity: severity,
-                snapshotUrl: imageSrc
-            });
-        } catch (error) {
-            console.error("Error sending event", error);
-        }
-        setTimeout(() => setStatus('Active'), 3000);
-    };
-
-    // Manual loop
-    const runFaceMesh = async () => {
-        if (
-            typeof webcamRef.current !== "undefined" &&
-            webcamRef.current !== null &&
-            webcamRef.current.video.readyState === 4 &&
-            faceMeshRef.current
-        ) {
-            // Get Video Properties
-            const video = webcamRef.current.video;
-            const videoWidth = video.videoWidth;
-            const videoHeight = video.videoHeight;
-
-            // Set video width
-            webcamRef.current.video.width = videoWidth;
-            webcamRef.current.video.height = videoHeight;
-
-            // Set canvas width
-            canvasRef.current.width = videoWidth;
-            canvasRef.current.height = videoHeight;
-
-            await faceMeshRef.current.send({ image: video });
-        }
-        requestRef.current = requestAnimationFrame(runFaceMesh);
-    };
-
-    const onUserMedia = (stream) => {
-        console.log("Webcam stream started");
-        runFaceMesh();
-    };
-
-    const onUserMediaError = (error) => {
-        console.error("Webcam error:", error);
-        alert("Camera access denied or missing. Please allow camera access.");
-    };
+    /* Local React Event & Video logic removed - handled entirely by YOLO edge service now */
 
     const getStatusColor = () => {
         if (status === 'DROWSINESS') return '#ef4444';
@@ -342,36 +130,28 @@ const DriverMonitor = () => {
                 {/* Main Camera Feed */}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '24px', flex: 2 }}>
                     <div className="card-glass" style={{ flex: 1, padding: 0, overflow: 'hidden', position: 'relative', display: 'flex', justifyContent: 'center', alignItems: 'center', background: '#000' }}>
-                        <Webcam
-                            ref={webcamRef}
-                            onUserMedia={onUserMedia}
-                            onUserMediaError={onUserMediaError}
-                            screenshotFormat="image/jpeg"
+                        <img
+                            src={videoStreamUrl}
+                            alt="YOLO Live Stream"
                             style={{
                                 position: 'absolute',
                                 left: 0,
                                 right: 0,
                                 textAlign: 'center',
-                                zindex: 9,
+                                zIndex: 9,
                                 width: '100%',
                                 height: '100%',
                                 objectFit: 'cover'
                             }}
-                            mirrored={true}
-                        />
-                        <canvas
-                            ref={canvasRef}
-                            style={{
-                                position: 'absolute',
-                                left: 0,
-                                right: 0,
-                                textAlign: 'center',
-                                zindex: 9,
-                                width: '100%',
-                                height: '100%',
-                                objectFit: 'cover'
+                            onError={(e) => {
+                                e.target.style.display = 'none';
+                                e.target.nextSibling.style.display = 'flex';
                             }}
                         />
+                        <div style={{ display: 'none', flexDirection: 'column', alignItems: 'center', color: '#a0a0a0', zIndex: 10 }}>
+                             <Video size={48} />
+                             <span>YOLO Edge Stream Offline</span>
+                        </div>
 
                         {/* Overlay Status */}
                         <div style={{

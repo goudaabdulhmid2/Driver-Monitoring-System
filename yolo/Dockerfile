@@ -3,10 +3,9 @@ FROM python:3.10-slim
 
 # Install system dependencies needed for OpenCV, ncnn and camera access
 RUN apt-get update && apt-get install -y \
-    libgl1-mesa-glx \
+    libgl1 \
     libglib2.0-0 \
     python3-pip \
-    python3-picamera2 \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
