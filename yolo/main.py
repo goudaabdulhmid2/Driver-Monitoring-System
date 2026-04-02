@@ -81,6 +81,8 @@ def start_pipeline():
             
             # 2. YOLO Preprocessing & Inference -> Bounding Boxes & Class Detection
             detections = detector.detect(frame)
+            if detections:
+                print(f"🔍 Detections found: {[d['class'] for d in detections]}")
             
             # Draw bounding boxes
             for det in detections:

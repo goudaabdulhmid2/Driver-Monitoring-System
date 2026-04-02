@@ -42,12 +42,14 @@ services:
     # Only uncomment below if running on the Raspberry Pi or a device with a camera
     # devices:
     #   - "/dev/video0:/dev/video0"
+    env_file:
+      - ./yolo/.env
     environment:
       - API_URL=http://backend:5000/api/events
-      - SHOW_VIDEO=False
-      - FLASK_PORT=5001
-      - DRIVER_ID=CHANGEME
-      - IP_CAMERA_URL=${IP_CAMERA_URL:-}
+      - DRIVER_ID=206570
+      - IP_CAMERA_URL=http://host.docker.internal:4748/video
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     depends_on:
       - backend
     restart: unless-stopped
