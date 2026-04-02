@@ -39,9 +39,9 @@ services:
     container_name: dms_yolo
     ports:
       - "5001:5001"
-    # Only uncomment below if running on the Raspberry Pi or a device with a camera
-    # devices:
-    #   - "/dev/video0:/dev/video0"
+    devices:
+      - "/dev/video0:/dev/video0"
+    privileged: true
     environment:
       - API_URL=http://backend:5000/api/events
       - SHOW_VIDEO=False

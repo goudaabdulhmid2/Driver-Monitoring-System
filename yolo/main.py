@@ -81,6 +81,8 @@ def start_pipeline():
             
             # 2. YOLO Preprocessing & Inference -> Bounding Boxes & Class Detection
             detections = detector.detect(frame)
+            if detections:
+                print(f"🔍 Detections found: {[d['class'] for d in detections]} (Confidence: {[round(d['conf'], 2) for d in detections]})")
             
             # Draw bounding boxes
             for det in detections:
@@ -94,7 +96,7 @@ def start_pipeline():
 
             current_time = time.time()
             if event_type and (current_time - last_alert_time >= config.ALERT_COOLDOWN):
-                print(f"🚨 Behavior Logic Triggered! Event: {event_type}, Severity: {severity}")
+                print(f"🚨 Behavior Logic Triggered! Event: {event_type}, Severity: {severity}, Confidence: {highest_conf:.2f}")
                 
                 # 4. Trigger Local Alarm
                 alarm.trigger_alarm(severity_level=severity)
