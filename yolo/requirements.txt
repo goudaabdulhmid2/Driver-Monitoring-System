@@ -4,6 +4,6 @@ flask
 requests
 Flask-Cors==5.0.0
 numpy
-# picamera2 is typically installed via apt on Raspberry Pi OS (python3-picamera2)
-# but for our Docker environment, we rely on the system-level picamera2 if found,
-# or standard OpenCV if using a USB webcam as requested.
+picamera2
+# picamera2 is required for Native Pi Camera Module on Pi 5.
+# For USB webcams, it will fall back to using standard OpenCV.

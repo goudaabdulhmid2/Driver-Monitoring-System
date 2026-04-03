@@ -4,11 +4,15 @@ FROM python:3.10-slim
 # Set piwheels for ARM performance (pre-compiled binaries for Pi)
 ENV PIP_EXTRA_INDEX_URL=https://www.piwheels.org/simple
 
-# Install system dependencies needed for OpenCV and NCNN
+# Install system dependencies needed for OpenCV, NCNN and Native Pi Camera (libcamera)
 RUN apt-get update && apt-get install -y \
     libgl1 \
     libglib2.0-0 \
     libatomic1 \
+    libcamera-v4l2 \
+    libcamera-apps-lite \
+    libpisp-dev \
+    libcap-dev \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app

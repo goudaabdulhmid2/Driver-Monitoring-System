@@ -1,9 +1,6 @@
-version: '3.8'
-
 services:
   mongodb:
     image: mongo:latest
-    container_name: dms_mongodb
     ports:
       - "27017:27017"
     volumes:
@@ -12,7 +9,6 @@ services:
 
   backend:
     build: ./backend
-    container_name: dms_backend
     ports:
       - "8080:5000"
     environment:
@@ -25,28 +21,31 @@ services:
 
   frontend:
     build: ./frontend
-    container_name: dms_frontend
     ports:
       - "5173:5173"
     environment:
       - VITE_API_URL=http://localhost:8080
-    depends_on:
-      - backend
     restart: always
 
   yolo:
     build: ./yolo
-    container_name: dms_yolo
     ports:
       - "5001:5001"
     devices:
       - "/dev/video0:/dev/video0"
+      - "/dev/video1:/dev/video1"
+      - "/dev/video2:/dev/video2"
+      - "/dev/video10:/dev/video10"
+      - "/dev/video11:/dev/video11"
+      - "/dev/dma_heap:/dev/dma_heap"
+      - "/dev/vchiq:/dev/vchiq"
     privileged: true
+    ipc: host
     environment:
       - API_URL=http://backend:5000/api/events
       - SHOW_VIDEO=False
       - FLASK_PORT=5001
-      - DRIVER_ID=CHANGEME
+      - DRIVER_ID=206570
     depends_on:
       - backend
     restart: unless-stopped
