@@ -16,6 +16,7 @@ class DriverStateEngine:
         
         # Mapping rules to standard event types
         self.EVENT_MAP = {
+            # Immediate Phone & Distraction Rules
             "phone": "PHONE_USAGE",
             "phone_usage": "PHONE_USAGE",
             "mobile phone": "PHONE_USAGE",
@@ -28,7 +29,14 @@ class DriverStateEngine:
             "no seatbelt": "NO_SEATBELT",
             "seat-belt": "NO_SEATBELT",
             "yawning": "DROWSINESS",
-            "yawn": "DROWSINESS"
+            "yawn": "DROWSINESS",
+            
+            # Reprogrammed Drowsiness to an IMMEDIATE trigger to bypass YOLO frame drop jitter!
+            "drowsy": "DROWSINESS",
+            "eyes_closed": "DROWSINESS",
+            "closed eyes": "DROWSINESS",
+            "closed_eyes": "DROWSINESS",
+            "0": "DROWSINESS"
         }
 
     def process_detections(self, detections):
@@ -51,18 +59,8 @@ class DriverStateEngine:
                 severity = "MEDIUM" # Default to medium, backend handles auto-mapping too
 
         # Rule 2: Time-based triggers (Drowsiness)
-        drowsy_keys = ["drowsy", "eyes_closed", "closed eyes", "closed_eyes", "0"]
-        if any(k in detected_classes for k in drowsy_keys):
-            if self.state_timers["drowsy"] is None:
-                self.state_timers["drowsy"] = current_time
-            elif current_time - self.state_timers["drowsy"] > self.thresholds["drowsy"]:
-                event_to_trigger = "DROWSINESS"
-                severity = "CRITICAL"
-                # Get max confidence of whichever drowsy key matched
-                confList = [detected_classes[k] for k in drowsy_keys if k in detected_classes]
-                highest_conf = max(highest_conf, max(confList) if confList else 0.99)
-        else:
-            self.state_timers["drowsy"] = None
+        # REMOVED: Drowsiness is now an immediate trigger handled by EVENT_MAP above
+        # This prevents YOLO frame-jitter from resetting the timer.
 
         # Rule 3: Time-based trigger (No Face)
         # YOLO doesn't detect 'absence', it simply outputs 0 bounding boxes.
