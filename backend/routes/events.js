@@ -8,7 +8,14 @@ const router = express.Router();
 
 // @route POST /api/events
 router.post('/', async (req, res) => {
-    const { driverId, eventType, confidence, severity, snapshotUrl, source } = req.body;
+    let { driverId, eventType, confidence, severity, snapshotUrl, source } = req.body;
+
+    // Auto-map AI detections to the registered user without needing manual .env ID syncing
+    const DriverProfile = require('../models/DriverProfile');
+    const defaultProfile = await DriverProfile.findOne();
+    if (defaultProfile) {
+        driverId = defaultProfile.userId;
+    }
 
     let finalSnapshotUrl = snapshotUrl;
 
@@ -53,8 +60,6 @@ router.post('/', async (req, res) => {
             snapshotUrl: finalSnapshotUrl,
             source: source || 'SYSTEM'
         });
-
-        const DriverProfile = require('../models/DriverProfile');
 
         // Update Driver's real-time state and safety score
         const profile = await DriverProfile.findOneAndUpdate(

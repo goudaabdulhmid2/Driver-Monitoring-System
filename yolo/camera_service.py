@@ -52,8 +52,13 @@ class CameraService:
     def _init_opencv(self, source, ip_camera_url):
         self.cam_source = ip_camera_url if ip_camera_url else source
         print(f"🎬 Initializing OpenCV VideoCapture (Target={self.cam_source})...")
-        self.cam = cv2.VideoCapture(self.cam_source)
+        # Ensure FFMPEG is used for the TCP stream decoding
+        self.cam = cv2.VideoCapture(self.cam_source, cv2.CAP_FFMPEG)
         
+        if self.cam.isOpened():
+            # CRITICAL LATENCY FIX: Force OpenCV to drop buffered TCP frames 
+            self.cam.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+            
         # We lock into OPENCV mode. If it fails to open, get_frame will handle the auto-reconnect!
         self.mode = "OPENCV"
 
