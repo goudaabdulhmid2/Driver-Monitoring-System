@@ -27,7 +27,7 @@ class CameraService:
                 "--nopreview",
                 "-o", "-"
             ]
-            self.process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+            self.process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
             
             # Read one frame to test if the camera is actually working
             test_bytes = self.process.stdout.read(self.frame_size)
@@ -36,11 +36,12 @@ class CameraService:
                 self._decode_yuv(test_bytes)
                 print("✅ Successfully connected to Pi Camera via rpicam-vid.")
             else:
-                raise Exception("Could not read initial frame from rpicam-vid.")
+                err_output = self.process.stderr.read().decode('utf-8')
+                raise Exception(f"Could not read initial frame. Error details: {err_output}")
         except Exception as e:
             if self.process:
                 self.process.kill()
-            print(f"⚠️ Native Pi Camera (rpicam-vid) failed: {e}. Falling back to OpenCV.")
+            print(f"⚠️ Native Pi Camera (rpicam-vid) failed. Details: {e}\nFalling back to OpenCV.")
             self._init_opencv(source)
 
     def _init_opencv(self, source):
