@@ -21,8 +21,11 @@ class DriverStateEngine:
             "mobile phone": "PHONE_USAGE",
             "cell phone": "PHONE_USAGE",
             "distraction": "DISTRACTION",
+            "looking away": "DISTRACTION",
             "no_seatbelt": "NO_SEATBELT",
-            "yawning": "DROWSINESS"
+            "no seatbelt": "NO_SEATBELT",
+            "yawning": "DROWSINESS",
+            "yawn": "DROWSINESS"
         }
 
     def process_detections(self, detections):
@@ -45,24 +48,29 @@ class DriverStateEngine:
                 severity = "MEDIUM" # Default to medium, backend handles auto-mapping too
 
         # Rule 2: Time-based triggers (Drowsiness)
-        if "drowsy" in detected_classes or "eyes_closed" in detected_classes:
+        drowsy_keys = ["drowsy", "eyes_closed", "closed eyes", "closed_eyes"]
+        if any(k in detected_classes for k in drowsy_keys):
             if self.state_timers["drowsy"] is None:
                 self.state_timers["drowsy"] = current_time
             elif current_time - self.state_timers["drowsy"] > self.thresholds["drowsy"]:
                 event_to_trigger = "DROWSINESS"
                 severity = "CRITICAL"
-                highest_conf = max(highest_conf, detected_classes.get("drowsy", 0.99))
+                # Get max confidence of whichever drowsy key matched
+                confList = [detected_classes[k] for k in drowsy_keys if k in detected_classes]
+                highest_conf = max(highest_conf, max(confList) if confList else 0.99)
         else:
             self.state_timers["drowsy"] = None
 
         # Rule 3: Time-based trigger (No Face)
-        if "no_face" in detected_classes:
+        noface_keys = ["no_face", "no face"]
+        if any(k in detected_classes for k in noface_keys):
             if self.state_timers["no_face"] is None:
                 self.state_timers["no_face"] = current_time
             elif current_time - self.state_timers["no_face"] > self.thresholds["no_face"]:
                 event_to_trigger = "NO_FACE"
                 severity = "HIGH"
-                highest_conf = max(highest_conf, detected_classes.get("no_face", 0.99))
+                confList = [detected_classes[k] for k in noface_keys if k in detected_classes]
+                highest_conf = max(highest_conf, max(confList) if confList else 0.99)
         else:
             self.state_timers["no_face"] = None
 
