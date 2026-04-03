@@ -33,8 +33,13 @@ class EventSender:
             "snapshotUrl": snapshot
         }
 
+        # Bulletproof internal network routing
+        target_url = "http://backend:5000/api/events"
+        
         try:
-            response = requests.post(self.api_url, json=payload, timeout=3)
+            response = requests.post(target_url, json=payload, timeout=3)
             print(f"✅ Event Sent to Backend: {event_type} - Response: {response.status_code}")
+            if response.status_code != 201:
+                print(f"⚠️ Warning: Backend returned {response.status_code}. Content: {response.text}")
         except Exception as e:
-            print(f"❌ Failed to reach backend API ({self.api_url}): {e}")
+            print(f"❌ Failed to reach backend API ({target_url}): {e}")
