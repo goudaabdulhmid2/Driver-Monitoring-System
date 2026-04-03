@@ -20,10 +20,13 @@ class DriverStateEngine:
             "phone_usage": "PHONE_USAGE",
             "mobile phone": "PHONE_USAGE",
             "cell phone": "PHONE_USAGE",
+            "my-phone": "PHONE_USAGE",
             "distraction": "DISTRACTION",
             "looking away": "DISTRACTION",
+            "smoke": "DISTRACTION",
             "no_seatbelt": "NO_SEATBELT",
             "no seatbelt": "NO_SEATBELT",
+            "seat-belt": "NO_SEATBELT",
             "yawning": "DROWSINESS",
             "yawn": "DROWSINESS"
         }
@@ -48,7 +51,7 @@ class DriverStateEngine:
                 severity = "MEDIUM" # Default to medium, backend handles auto-mapping too
 
         # Rule 2: Time-based triggers (Drowsiness)
-        drowsy_keys = ["drowsy", "eyes_closed", "closed eyes", "closed_eyes"]
+        drowsy_keys = ["drowsy", "eyes_closed", "closed eyes", "closed_eyes", "0"]
         if any(k in detected_classes for k in drowsy_keys):
             if self.state_timers["drowsy"] is None:
                 self.state_timers["drowsy"] = current_time
@@ -62,7 +65,7 @@ class DriverStateEngine:
             self.state_timers["drowsy"] = None
 
         # Rule 3: Time-based trigger (No Face)
-        noface_keys = ["no_face", "no face"]
+        noface_keys = ["no_face", "no face", "1"]
         if any(k in detected_classes for k in noface_keys):
             if self.state_timers["no_face"] is None:
                 self.state_timers["no_face"] = current_time
