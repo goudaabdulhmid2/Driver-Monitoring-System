@@ -18,6 +18,8 @@ class DriverStateEngine:
         self.EVENT_MAP = {
             "phone": "PHONE_USAGE",
             "phone_usage": "PHONE_USAGE",
+            "mobile phone": "PHONE_USAGE",
+            "cell phone": "PHONE_USAGE",
             "distraction": "DISTRACTION",
             "no_seatbelt": "NO_SEATBELT",
             "yawning": "DROWSINESS"

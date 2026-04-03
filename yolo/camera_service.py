@@ -66,6 +66,8 @@ class CameraService:
         self.is_running = True
         if self.mode == "RPICAM":
             threading.Thread(target=self._rpicam_reader, daemon=True).start()
+        elif self.mode == "OPENCV":
+            threading.Thread(target=self._opencv_reader, daemon=True).start()
         print(f"✅ Camera Service started in {self.mode} mode.")
 
     def _rpicam_reader(self):
@@ -77,6 +79,22 @@ class CameraService:
                 continue
             self._decode_yuv(raw_data)
 
+    def _opencv_reader(self):
+        while self.is_running:
+            if self.cam and self.cam.isOpened():
+                ret, frame = self.cam.read()
+                if ret and frame is not None:
+                    self.latest_frame = frame
+                else:
+                    self.latest_frame = None
+                    print(f"⚠️ OpenCV failed to read frame. Attempting reconnect to {self.cam_source}...")
+                    self.cam.release()
+                    time.sleep(2)
+                    self.cam = cv2.VideoCapture(self.cam_source)
+            else:
+                self.latest_frame = None
+                time.sleep(0.5)
+
     def _decode_yuv(self, raw_data):
         yuv = np.frombuffer(raw_data, dtype=np.uint8).reshape((int(self.resH * 1.5), self.resW))
         self.latest_frame = cv2.cvtColor(yuv, cv2.COLOR_YUV2BGR_I420)
@@ -85,27 +103,16 @@ class CameraService:
         if not self.is_running:
             return None
             
-        if self.mode == "RPICAM":
-            if self.latest_frame is None:
-                return self._get_dummy_frame()
-            return self.latest_frame.copy()
-        elif self.mode == "OPENCV":
-            ret, frame = self.cam.read()
-            if not ret or frame is None:
-                print(f"⚠️ OpenCV failed to read frame. Attempting reconnect to {self.cam_source}...")
-                self.cam.release()
-                time.sleep(2)
-                self.cam = cv2.VideoCapture(self.cam_source)
-                return self._get_dummy_frame()
-            return frame
-        else:
+        if self.latest_frame is None:
             return self._get_dummy_frame()
+            
+        return self.latest_frame.copy()
 
     def stop(self):
         self.is_running = False
         if self.mode == "RPICAM" and self.process:
             self.process.kill()
-        elif self.mode == "OPENCV":
+        elif self.mode == "OPENCV" and self.cam:
             self.cam.release()
             
     def _get_dummy_frame(self):
