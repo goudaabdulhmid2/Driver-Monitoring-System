@@ -7,7 +7,7 @@ import numpy as np
 HAS_PICAMERA = False # Disabled pip bindings in favor of rpicam-vid subprocess
 
 class CameraService:
-    def __init__(self, resolution="640x640", source=0):
+    def __init__(self, resolution="640x640", source=0, ip_camera_url=""):
         self.resW, self.resH = map(int, resolution.split("x"))
         self.is_running = False
         self.mode = "DUMMY"
@@ -15,6 +15,11 @@ class CameraService:
         self.process = None
         self.frame_size = int(self.resW * self.resH * 1.5) # Size of YUV420 frame
         
+        if ip_camera_url:
+            print(f"📡 IP_CAMERA_URL detected! Skipping local hardware checks.")
+            self._init_opencv(source, ip_camera_url)
+            return
+
         try:
             print("📷 Attempting to use Native Pi Camera via rpicam-vid subprocess...")
             cmd = [
@@ -42,14 +47,18 @@ class CameraService:
             if self.process:
                 self.process.kill()
             print(f"⚠️ Native Pi Camera (rpicam-vid) failed. Details: {e}\nFalling back to OpenCV.")
-            self._init_opencv(source)
+            self._init_opencv(source, "")
 
-    def _init_opencv(self, source):
-        print(f"🎬 Initializing OpenCV VideoCapture (source={source})...")
-        self.cam = cv2.VideoCapture(source)
-        if not self.cam.isOpened() and source == 0:
-            print("⚠️ source=0 failed, trying source=1...")
-            self.cam = cv2.VideoCapture(1)
+    def _init_opencv(self, source, ip_camera_url):
+        if ip_camera_url:
+            print(f"🎬 Initializing OpenCV VideoCapture from Stream: {ip_camera_url}")
+            self.cam = cv2.VideoCapture(ip_camera_url)
+        else:
+            print(f"🎬 Initializing OpenCV VideoCapture (source={source})...")
+            self.cam = cv2.VideoCapture(source)
+            if not self.cam.isOpened() and source == 0:
+                print("⚠️ source=0 failed, trying source=1...")
+                self.cam = cv2.VideoCapture(1)
             
         if self.cam.isOpened():
             self.cam.set(cv2.CAP_PROP_FRAME_WIDTH, self.resW)

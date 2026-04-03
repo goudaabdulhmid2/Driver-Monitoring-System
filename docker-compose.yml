@@ -46,6 +46,7 @@ services:
       - SHOW_VIDEO=False
       - FLASK_PORT=5001
       - DRIVER_ID=206570
+      - IP_CAMERA_URL=tcp://host.docker.internal:4748
     depends_on:
       - backend
     restart: unless-stopped

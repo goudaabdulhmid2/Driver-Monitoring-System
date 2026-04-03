@@ -58,7 +58,7 @@ def start_pipeline():
     print("🚀 Starting Modular Driver Monitoring Edge Device!")
     
     # Initialize all components
-    cam_service = CameraService(resolution=config.RESOLUTION)
+    cam_service = CameraService(resolution=config.RESOLUTION, ip_camera_url=config.IP_CAMERA_URL)
     detector = YoloDetector(model_path=config.MODEL_PATH, min_thresh=config.MIN_THRESH)
     state_engine = DriverStateEngine()
     alarm = AlarmController()

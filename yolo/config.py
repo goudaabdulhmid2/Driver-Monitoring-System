@@ -18,6 +18,7 @@ load_env()
 # Export configurations
 API_URL = os.environ.get("API_URL", "http://localhost:8080/api/events")
 DRIVER_ID = os.environ.get("DRIVER_ID", "CHANGEME")
+IP_CAMERA_URL = os.environ.get("IP_CAMERA_URL", "")
 
 MODEL_PATH = os.environ.get("MODEL_PATH", "best_ncnn_model")
 RESOLUTION = os.environ.get("RESOLUTION", "900x900")
