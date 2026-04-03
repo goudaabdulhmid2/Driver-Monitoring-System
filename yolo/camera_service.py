@@ -1,6 +1,8 @@
 import subprocess
 import threading
 import time
+import cv2
+import numpy as np
 
 HAS_PICAMERA = False # Disabled pip bindings in favor of rpicam-vid subprocess
 
