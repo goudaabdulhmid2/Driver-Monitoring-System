@@ -4,6 +4,6 @@ flask
 requests
 Flask-Cors==5.0.0
 numpy
-picamera2
-# picamera2 is required for Native Pi Camera Module on Pi 5.
+# Using rpicam-vid via subprocess for Pi 5 camera access
+
 # For USB webcams, it will fall back to using standard OpenCV.
