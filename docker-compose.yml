@@ -47,6 +47,8 @@ services:
       - FLASK_PORT=5001
       - DRIVER_ID=206570
       - IP_CAMERA_URL=tcp://host.docker.internal:4748
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     depends_on:
       - backend
     restart: unless-stopped

@@ -50,23 +50,12 @@ class CameraService:
             self._init_opencv(source, "")
 
     def _init_opencv(self, source, ip_camera_url):
-        if ip_camera_url:
-            print(f"🎬 Initializing OpenCV VideoCapture from Stream: {ip_camera_url}")
-            self.cam = cv2.VideoCapture(ip_camera_url)
-        else:
-            print(f"🎬 Initializing OpenCV VideoCapture (source={source})...")
-            self.cam = cv2.VideoCapture(source)
-            if not self.cam.isOpened() and source == 0:
-                print("⚠️ source=0 failed, trying source=1...")
-                self.cam = cv2.VideoCapture(1)
-            
-        if self.cam.isOpened():
-            self.cam.set(cv2.CAP_PROP_FRAME_WIDTH, self.resW)
-            self.cam.set(cv2.CAP_PROP_FRAME_HEIGHT, self.resH)
-            self.mode = "OPENCV"
-        else:
-            print("❌ All cameras failed to initialize.")
-            self.mode = "DUMMY"
+        self.cam_source = ip_camera_url if ip_camera_url else source
+        print(f"🎬 Initializing OpenCV VideoCapture (Target={self.cam_source})...")
+        self.cam = cv2.VideoCapture(self.cam_source)
+        
+        # We lock into OPENCV mode. If it fails to open, get_frame will handle the auto-reconnect!
+        self.mode = "OPENCV"
 
     def start(self):
         self.is_running = True
@@ -98,6 +87,10 @@ class CameraService:
         elif self.mode == "OPENCV":
             ret, frame = self.cam.read()
             if not ret or frame is None:
+                print(f"⚠️ OpenCV failed to read frame. Attempting reconnect to {self.cam_source}...")
+                self.cam.release()
+                time.sleep(2)
+                self.cam = cv2.VideoCapture(self.cam_source)
                 return self._get_dummy_frame()
             return frame
         else:
