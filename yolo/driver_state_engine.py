@@ -8,10 +8,10 @@ class DriverStateEngine:
             "no_face": None
         }
         
-        # Thresholds in seconds
+        # Thresholds in seconds (lowered for immediate prototyping testing)
         self.thresholds = {
-            "drowsy": 2.0,
-            "no_face": 3.0
+            "drowsy": 0.5,
+            "no_face": 2.0
         }
         
         # Mapping rules to standard event types
@@ -65,15 +65,18 @@ class DriverStateEngine:
             self.state_timers["drowsy"] = None
 
         # Rule 3: Time-based trigger (No Face)
-        noface_keys = ["no_face", "no face", "1"]
-        if any(k in detected_classes for k in noface_keys):
+        # YOLO doesn't detect 'absence', it simply outputs 0 bounding boxes.
+        # Alternatively, it might explicitly output 'no_face'. 
+        explicit_no_face = any(k in detected_classes for k in ["no_face", "no face", "1"])
+        no_detections_at_all = (len(detections) == 0)
+        
+        if explicit_no_face or no_detections_at_all:
             if self.state_timers["no_face"] is None:
                 self.state_timers["no_face"] = current_time
             elif current_time - self.state_timers["no_face"] > self.thresholds["no_face"]:
                 event_to_trigger = "NO_FACE"
                 severity = "HIGH"
-                confList = [detected_classes[k] for k in noface_keys if k in detected_classes]
-                highest_conf = max(highest_conf, max(confList) if confList else 0.99)
+                highest_conf = 0.99
         else:
             self.state_timers["no_face"] = None
 
