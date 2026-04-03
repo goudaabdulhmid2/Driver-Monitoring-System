@@ -12,7 +12,22 @@ router.post('/', async (req, res) => {
 
     // Auto-map AI detections to the registered user without needing manual .env ID syncing
     const DriverProfile = require('../models/DriverProfile');
-    const defaultProfile = await DriverProfile.findOne();
+    const User = require('../models/User');
+    
+    let defaultProfile = await DriverProfile.findOne();
+    
+    // Auto-heal: If no driver profile exists at all (legacy account), create one for the first driver user
+    if (!defaultProfile) {
+        const firstUser = await User.findOne({ role: 'DRIVER' }) || await User.findOne();
+        if (firstUser) {
+            defaultProfile = await DriverProfile.create({
+                userId: firstUser._id,
+                licenseNumber: "AUTO-GEN-" + Math.floor(Math.random() * 10000),
+                vehicleId: "AUTO-VEH-" + Math.floor(Math.random() * 10000)
+            });
+        }
+    }
+
     if (defaultProfile) {
         driverId = defaultProfile.userId;
     }
