@@ -90,10 +90,18 @@ class CameraService:
                     print(f"⚠️ OpenCV failed to read frame. Attempting reconnect to {self.cam_source}...")
                     self.cam.release()
                     time.sleep(2)
-                    self.cam = cv2.VideoCapture(self.cam_source)
+                    self.cam = cv2.VideoCapture(self.cam_source, cv2.CAP_FFMPEG)
+                    self.cam.set(cv2.CAP_PROP_BUFFERSIZE, 1)
             else:
                 self.latest_frame = None
-                time.sleep(0.5)
+                print(f"⚠️ Camera not opened. Attempting reconnect to {self.cam_source}...")
+                if self.cam:
+                    self.cam.release()
+                time.sleep(2)
+                self.cam = cv2.VideoCapture(self.cam_source, cv2.CAP_FFMPEG)
+                if self.cam.isOpened():
+                    self.cam.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+                    print(f"✅ Reconnected successfully!")
 
     def _decode_yuv(self, raw_data):
         yuv = np.frombuffer(raw_data, dtype=np.uint8).reshape((int(self.resH * 1.5), self.resW))
