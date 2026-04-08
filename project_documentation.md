@@ -135,3 +135,41 @@ The entire ecosystem spans across standard Linux daemon processes and Docker net
 
 - **Internal Host Mapping**: Bypasses external internet. Subnet internal DNS mappings (e.g. `http://backend:5000/api/events`) restrict data travel physically within the hardware microchip layout, mitigating external WiFi packet loss.
 - **Strict Data Mongoose Ecosystems**: Synchronizes Schema data constraints (`NO_SEATBELT`, `DROWSINESS`) directly between Node.js logic checks and React GUI variables ensuring safe typed variables end-to-end.
+
+---
+
+## 4. Technologies Used
+
+**Hardware & Operating System**
+*   **Raspberry Pi 5**: Primary edge computing node.
+*   **libcamera / rpicam-vid**: High-performance native camera interface for Raspberry Pi hardware.
+
+**Computer Vision Edge Container**
+*   **Python 3.11**: Ecosystem runtime for the AI models.
+*   **OpenCV (cv2) / FFMPEG**: Core visual streaming, frame extraction, and MJPEG broadcasting logic over TCP.
+*   **Ultralytics (YOLO) & NCNN**: Deep Learning framework compiled specifically for high-speed edge hardware inference to bypass heavy PyTorch overhead.
+*   **Flask**: Lightweight synchronous web server used explicitly for serving the real-time MJPEG debug video feed across the internal Docker subnet.
+
+**Backend Server Container**
+*   **Node.js & Express.js**: High-throughput REST API interface to ingest high-frequency YOLO AI events.
+*   **MongoDB & Mongoose**: NoSQL persistent storage utilizing extremely strict Schema Validation Enums (`['DROWSINESS', 'NO_SEATBELT']`) to enforce data consistency.
+*   **Socket.io**: Real-time bidirectional event-based communication library connecting the backend organically to the React Dashboards.
+
+**Frontend Dashboard Container**
+*   **React.js (Vite)**: Component-based UI rendering engine.
+*   **Recharts**: Composable charting library to render dynamic statistical arrays based directly on incoming Socket.io payloads.
+
+**Deployment Architecture**
+*   **Docker & Docker Compose**: Complete microservice containerization, establishing internal non-internet-reliant subnets for secure, 0-latency TCP packet transfers.
+
+---
+
+## 5. System Outputs
+
+When the system detects an active violation, it executes a cascading wave of physical and digital outputs across the architecture simultaneously:
+
+1.  **Auditory Hardware Alarms (Local)**: The edge device immediately physically sounds a `BEEP` (via physical Buzzer or Terminal Chime) depending on the evaluated Severity configuration (`LOW`, `MEDIUM`, `HIGH`, `CRITICAL`).
+2.  **Database Persistence (Centralized)**: The Node.js server physically creates an `Event` Schema inside MongoDB preserving the precise `confidence` score, the translation enum, and deducts contextual points mathematically off the active `DriverProfile` Safety Score.
+3.  **Real-time Base64 Snapshots (Archival)**: Natively encodes the exact `NumPy` violation frame over the HTTP request and archives it directly into the Backend `/uploads/` file system directory, attaching the URL statically to the Database schema.
+4.  **Local Driver Dashboard Analytics (Visual)**: Fires the `driver_status_update` localized WebSocket push. The edge screen actively flashes the contextual Warning Badge (e.g., Orange for Distraction, Red for Drowsiness) and statically ticks the lifetime statistical integers upward.
+5.  **Fleet Manager Live Stream (Remote Visual)**: Emits `new_alert` to the remote Supervisor Panel. The `Recharts` graph mathematically recompiles, and the Manager can optionally tap directly into the MJPEG internal port (`5001`) to view a live 10-FPS feed of the driver with YOLO bounding boxes actively drawn on the overlay.
