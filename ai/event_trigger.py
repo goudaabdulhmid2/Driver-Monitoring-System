@@ -9,7 +9,7 @@ API_URL = "http://localhost:8080/api/events"
 # Mock Driver ID representing a populated driver in the database
 DRIVER_ID = "CHANGEME" # User will need to set this to a real driver ID
 
-EVENTS = ['DROWSINESS', 'DISTRACTION', 'PHONE_USAGE', 'NO_FACE', 'NO_SEATBELT', 'NORMAL']
+EVENTS = ['DROWSINESS', 'DISTRACTION', 'PHONE_USAGE', 'NO_SEATBELT', 'NORMAL']
 
 def get_snapshot():
     """Mocks a base64 snapshot string"""
@@ -21,7 +21,7 @@ def get_snapshot():
     return None
 
 def simulate_detection():
-    event_type = random.choices(EVENTS, weights=[10, 15, 5, 2, 5, 63], k=1)[0]
+    event_type = random.choices(EVENTS, weights=[10, 15, 5, 5, 65], k=1)[0]
     
     if event_type == 'NORMAL':
         # If normal, maybe we don't send an event, or we send a 'NORMAL' ping. 

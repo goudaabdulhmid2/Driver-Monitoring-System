@@ -411,7 +411,6 @@ const SupervisorDashboard = () => {
 
     const [settings, setSystemSettings] = useState({
         drowsiness_threshold: 10,
-        no_face_timeout: 3,
         phone_detection_sensitivity: 'High',
         alert_sound_enabled: true,
         critical_alert_notifications: true,
@@ -446,18 +445,7 @@ const SupervisorDashboard = () => {
                             />
                         </div>
 
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <div>
-                                <div style={{ fontWeight: 500 }}>No Face Timeout (seconds)</div>
-                                <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Time before missing face triggers alert</div>
-                            </div>
-                            <input
-                                type="number"
-                                value={settings.no_face_timeout}
-                                onChange={(e) => handleSettingChange('no_face_timeout', parseInt(e.target.value))}
-                                style={{ background: 'var(--bg-dark)', border: '1px solid var(--border-color)', color: 'var(--text-primary)', padding: '8px', borderRadius: '4px', width: '80px' }}
-                            />
-                        </div>
+
 
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                             <div>

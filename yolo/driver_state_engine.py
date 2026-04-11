@@ -59,7 +59,4 @@ class DriverStateEngine:
         # REMOVED: Drowsiness is now an immediate trigger handled by EVENT_MAP above
         # This prevents YOLO frame-jitter from resetting the timer.
 
-        # Rule 3: Time-based trigger (No Face)
-        # REMOVED AT USER REQUEST
-
         return event_to_trigger, severity, highest_conf
