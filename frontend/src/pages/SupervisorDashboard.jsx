@@ -27,7 +27,7 @@ const SupervisorDashboard = () => {
     const { user, logout } = useAuth();
     const { theme, toggleTheme } = useTheme();
     const [alerts, setAlerts] = useState([]);
-    const [stats, setStats] = useState({ drowsiness: 0, distraction: 0, phone: 0, no_face: 0, no_seatbelt: 0 });
+    const [stats, setStats] = useState({ drowsiness: 0, distraction: 0, phone: 0, no_seatbelt: 0 });
 
     // UI State
     const [currentView, setCurrentView] = useState('dashboard');
@@ -102,13 +102,12 @@ const SupervisorDashboard = () => {
     const videoStreamUrl = 'http://localhost:5001/video_feed';
 
     const calculateStats = (data) => {
-        const counts = { drowsiness: 0, distraction: 0, phone: 0, no_face: 0, no_seatbelt: 0 };
+        const counts = { drowsiness: 0, distraction: 0, phone: 0, no_seatbelt: 0 };
         data.forEach(a => {
             const type = a.eventId?.eventType;
             if (type === 'DROWSINESS') counts.drowsiness++;
             if (type === 'DISTRACTION') counts.distraction++;
             if (type === 'PHONE_USAGE') counts.phone++;
-            if (type === 'NO_FACE') counts.no_face++;
             if (type === 'NO_SEATBELT') counts.no_seatbelt++;
         });
         setStats(counts);
@@ -144,7 +143,6 @@ const SupervisorDashboard = () => {
         { name: 'Drowsiness', value: stats.drowsiness, color: '#3b82f6' },
         { name: 'Distraction', value: stats.distraction, color: '#ef4444' },
         { name: 'Phone', value: stats.phone, color: '#22c55e' },
-        { name: 'No Face', value: stats.no_face, color: '#a855f7' },
         { name: 'No Seatbelt', value: stats.no_seatbelt, color: '#f59e0b' },
     ];
 
@@ -156,7 +154,6 @@ const SupervisorDashboard = () => {
         switch (type) {
             case 'DROWSINESS': return <span className="badge badge-red"><TriangleAlert size={12} /> Drowsiness Alerts</span>;
             case 'PHONE_USAGE': return <span className="badge badge-orange"><Smartphone size={12} /> Phone Usage</span>;
-            case 'NO_FACE': return <span className="badge badge-red"><User size={12} /> No Face</span>;
             case 'NO_SEATBELT': return <span className="badge badge-orange"><Activity size={12} /> No Seatbelt</span>;
             case 'DISTRACTION': return <span className="badge badge-orange"><TriangleAlert size={12} /> Distraction</span>;
             default: return <span className="badge badge-green"><CheckCircle size={12} /> Unknown</span>;
@@ -261,10 +258,6 @@ const SupervisorDashboard = () => {
                         <div className="stat-card">
                             <span className="stat-label flex items-center gap-2"><Smartphone size={16} /> Phone Usage</span>
                             <div className="stat-value-box"><span className="stat-value">{stats.phone}</span></div>
-                        </div>
-                        <div className="stat-card">
-                            <span className="stat-label flex items-center gap-2"><User size={16} /> No Face</span>
-                            <div className="stat-value-box"><span className="stat-value">{stats.no_face}</span></div>
                         </div>
                         <div className="stat-card">
                             <span className="stat-label flex items-center gap-2"><CheckCircle size={16} /> No Seatbelt</span>

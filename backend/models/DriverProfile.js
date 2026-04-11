@@ -5,7 +5,7 @@ const driverProfileSchema = new mongoose.Schema({
     licenseNumber: { type: String, required: true },
     vehicleId: { type: String, required: true },
     status: { type: String, enum: ['ONLINE', 'OFFLINE'], default: 'OFFLINE' },
-    currentStatus: { type: String, enum: ['NORMAL', 'DROWSINESS', 'DISTRACTION', 'PHONE_USAGE', 'NO_FACE', 'NO_SEATBELT'], default: 'NORMAL' },
+    currentStatus: { type: String, enum: ['NORMAL', 'DROWSINESS', 'DISTRACTION', 'PHONE_USAGE', 'NO_SEATBELT'], default: 'NORMAL' },
     safetyScore: { type: Number, default: 100 },
     lastActiveAt: { type: Date }
 }, { timestamps: true });

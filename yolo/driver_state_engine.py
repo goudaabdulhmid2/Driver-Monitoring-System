@@ -4,14 +4,11 @@ class DriverStateEngine:
     def __init__(self):
         # Timers to track duration of certain conditions
         self.state_timers = {
-            "drowsy": None,
-            "no_face": None
+            "drowsy": None
         }
         
-        # Thresholds in seconds (lowered for immediate prototyping testing)
         self.thresholds = {
-            "drowsy": 0.5,
-            "no_face": 2.0
+            "drowsy": 0.5
         }
         
         # Mapping rules to standard event types
@@ -63,19 +60,6 @@ class DriverStateEngine:
         # This prevents YOLO frame-jitter from resetting the timer.
 
         # Rule 3: Time-based trigger (No Face)
-        # YOLO doesn't detect 'absence', it simply outputs 0 bounding boxes.
-        # Alternatively, it might explicitly output 'no_face'. 
-        explicit_no_face = any(k in detected_classes for k in ["no_face", "no face", "1"])
-        no_detections_at_all = (len(detections) == 0)
-        
-        if explicit_no_face or no_detections_at_all:
-            if self.state_timers["no_face"] is None:
-                self.state_timers["no_face"] = current_time
-            elif current_time - self.state_timers["no_face"] > self.thresholds["no_face"]:
-                event_to_trigger = "NO_FACE"
-                severity = "HIGH"
-                highest_conf = 0.99
-        else:
-            self.state_timers["no_face"] = None
+        # REMOVED AT USER REQUEST
 
         return event_to_trigger, severity, highest_conf

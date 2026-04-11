@@ -4,7 +4,7 @@ const eventSchema = new mongoose.Schema({
     driverId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true, index: true },
     eventType: {
         type: String,
-        enum: ['DROWSINESS', 'DISTRACTION', 'PHONE_USAGE', 'NO_FACE', 'NO_SEATBELT'],
+        enum: ['DROWSINESS', 'DISTRACTION', 'PHONE_USAGE', 'NO_SEATBELT'],
         required: true
     },
     confidence: { type: Number, required: true },

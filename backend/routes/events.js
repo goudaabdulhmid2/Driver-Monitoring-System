@@ -59,7 +59,6 @@ router.post('/', async (req, res) => {
 
     switch (eventType) {
         case 'DROWSINESS': finalSeverity = 'CRITICAL'; scoreDeduction = 10; break;
-        case 'NO_FACE': finalSeverity = 'HIGH'; scoreDeduction = 6; break;
         case 'PHONE_USAGE': finalSeverity = 'MEDIUM'; scoreDeduction = 5; break;
         case 'DISTRACTION': finalSeverity = 'MEDIUM'; scoreDeduction = 4; break;
         case 'NO_SEATBELT': finalSeverity = 'MEDIUM'; scoreDeduction = 3; break;

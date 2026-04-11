@@ -27,7 +27,6 @@ const DriverMonitor = () => {
     const [blinkCount, setBlinkCount] = useState(0);
     const [phoneCount, setPhoneCount] = useState(0);
     const [distractionCount, setDistractionCount] = useState(0);
-    const [noFaceCount, setNoFaceCount] = useState(0);
     const [noSeatbeltCount, setNoSeatbeltCount] = useState(0);
     const [viewerCount, setViewerCount] = useState(0);
 
@@ -51,7 +50,6 @@ const DriverMonitor = () => {
             if (profileUpdate.currentStatus === 'DROWSINESS') setBlinkCount(prev => prev + 1);
             if (profileUpdate.currentStatus === 'PHONE_USAGE') setPhoneCount(prev => prev + 1);
             if (profileUpdate.currentStatus === 'DISTRACTION') setDistractionCount(prev => prev + 1);
-            if (profileUpdate.currentStatus === 'NO_FACE') setNoFaceCount(prev => prev + 1);
             if (profileUpdate.currentStatus === 'NO_SEATBELT') setNoSeatbeltCount(prev => prev + 1);
 
             setTimeout(() => setStatus('Active'), 3000); // Revert status display
@@ -61,19 +59,17 @@ const DriverMonitor = () => {
              try {
                 const alertsRes = await axios.get(`http://localhost:8080/api/events/${user._id}`);
                 const data = alertsRes.data;
-                const counts = { drowsiness: 0, distraction: 0, phone: 0, no_face: 0, no_seatbelt: 0 };
+                const counts = { drowsiness: 0, distraction: 0, phone: 0, no_seatbelt: 0 };
                 data.forEach(a => {
                     const type = a.eventType;
                     if (type === 'DROWSINESS') counts.drowsiness++;
                     if (type === 'DISTRACTION') counts.distraction++;
                     if (type === 'PHONE_USAGE') counts.phone++;
-                    if (type === 'NO_FACE') counts.no_face++;
                     if (type === 'NO_SEATBELT') counts.no_seatbelt++;
                 });
                 setBlinkCount(counts.drowsiness);
                 setDistractionCount(counts.distraction);
                 setPhoneCount(counts.phone);
-                setNoFaceCount(counts.no_face);
                 setNoSeatbeltCount(counts.no_seatbelt);
              } catch (e) {
                 console.error("Failed to load init stats", e);
@@ -102,7 +98,6 @@ const DriverMonitor = () => {
 
     const getStatusColor = () => {
         if (status === 'DROWSINESS') return '#ef4444';
-        if (status === 'NO_FACE') return '#ef4444';
         if (status === 'DISTRACTION') return '#f59e0b';
         if (status === 'PHONE_USAGE') return '#f59e0b';
         if (status === 'NO_SEATBELT') return '#f59e0b';
@@ -217,12 +212,6 @@ const DriverMonitor = () => {
                                 <span className="stat-label flex items-center gap-2"><Smartphone size={16} /> Phone Usage</span>
                                 <div className="stat-value-box">
                                     <span className="stat-value">{phoneCount}</span>
-                                </div>
-                            </div>
-                            <div className="stat-card">
-                                <span className="stat-label flex items-center gap-2"><User size={16} /> No Face</span>
-                                <div className="stat-value-box">
-                                    <span className="stat-value">{noFaceCount}</span>
                                 </div>
                             </div>
                             <div className="stat-card">

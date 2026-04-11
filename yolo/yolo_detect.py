@@ -52,7 +52,6 @@ CLASS_TO_EVENT_MAP = {
     "phone": "PHONE_USAGE",
     "phone_usage": "PHONE_USAGE",
     "distraction": "DISTRACTION",
-    "no_face": "NO_FACE",
     "no_seatbelt": "NO_SEATBELT",
     "normal": "NORMAL"
 }
