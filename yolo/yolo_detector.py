@@ -1,7 +1,7 @@
 from ultralytics import YOLO
 
 class YoloDetector:
-    def __init__(self, model_path="best_ncnn_model", min_thresh=0.5):
+    def __init__(self, model_path="best_ncnn_model", min_thresh=0.6):
         self.model = YOLO(model_path)
         self.labels = self.model.names
         self.min_thresh = min_thresh

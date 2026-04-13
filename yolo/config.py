@@ -22,7 +22,7 @@ IP_CAMERA_URL = os.environ.get("IP_CAMERA_URL", "")
 
 MODEL_PATH = os.environ.get("MODEL_PATH", "best_ncnn_model")
 RESOLUTION = os.environ.get("RESOLUTION", "900x900")
-MIN_THRESH = float(os.environ.get("MIN_THRESH", 0.7))
+MIN_THRESH = float(os.environ.get("MIN_THRESH", 0.6))
 ALERT_COOLDOWN = float(os.environ.get("ALERT_COOLDOWN", 5.0))
 
 SHOW_VIDEO = os.environ.get("SHOW_VIDEO", "False").lower() in ("true", "1", "yes")
